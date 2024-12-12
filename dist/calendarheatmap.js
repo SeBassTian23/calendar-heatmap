@@ -8352,7 +8352,7 @@ var settings = function settings() {
       "type": "check",
       "name": "data",
       "value": true,
-      "label": "Add Datapoint"
+      "label": "Include Value"
     }]
   };
 };
