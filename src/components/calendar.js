@@ -14,7 +14,7 @@ dayjs.extend(isoWeek);
 dayjs.extend(isToday);
 dayjs.extend(minMax);
 
-import round from 'lodash'
+import round from 'lodash/round'
 import {transformValue} from '../components/transform'
 
 const calendar = ( draw, {x, y, data = [], weekStart = 1, tileSize = 16, tileColor = "#dddddd", tileFuture = true, tileShape= "rectangle", tilePadding = 4.5, monthPadding = 10, monthGap = true, calendarMonthLabels = false, calendarWeekLabels = false,  scale = false, legend = false, transform = false, tooltip = false, dataInput = false } = {}) => {
