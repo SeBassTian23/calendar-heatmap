@@ -3,6 +3,7 @@
  */
 
 import fontmenu, { fontfaces } from "../constants/fonts";
+import help from "../constants/help";
 
 const calendarMonth = ( draw, { format = 'MMM \'YY', fontFamily = fontfaces[0].value, fontSize = 18, fontWeight = "normal", fontColor = "#212529", textAlignment = "middle"  } = {}) => {
   return {
@@ -24,7 +25,7 @@ export const settings = () => {
     "show": true,
     "disabled": false,
     "options": [
-      { "type": "text", "name": "format", "value": "MMM \'YY", "label": "Month Label Format" },
+      { "type": "text", "name": "format", "value": "MMM \'YY", "label": "Month Label Format", "icon": help("DATEFORMAT", {display: "info-icon"}) },
       ...fontmenu({size: 18, textAlignment: "middle" })
     ]
   }

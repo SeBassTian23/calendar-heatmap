@@ -2,6 +2,8 @@
  * Tooltip Element
  */
 
+import help from "../constants/help";
+
 const hover = ( draw, { format = 'YYYY-MM-DD', data = false } = {}) => {
   return {
     format,
@@ -19,8 +21,8 @@ export const settings = () => {
     "show": false,
     "disabled": false,
     "options": [
-      { "type": "text", "name": "format", "value": "YYYY-MM-DD", "label": "Date Format" },
-      { "type": "check", "name": "data", "value": true, "label": "Add Datapoint" },
+      { "type": "text", "name": "format", "value": "YYYY-MM-DD", "label": "Date Format", "icon": help("DATEFORMAT", {display: "info-icon"}) },
+      { "type": "check", "name": "data", "value": true, "label": "Include Datapoint" },
     ]
   }
 }

@@ -223,9 +223,11 @@ export default class CalendarHeatmap {
             if (option.type == 'range')
               html += this.elementInputRange(name, { ...option })
             if (option.type == 'select')
-              html += this.elementInputSelect(name, { ...option })  
+              html += this.elementInputSelect(name, { ...option })
             if (option.type == 'scales')
-              html += this.elementInputScales(name, { ...option })                        
+              html += this.elementInputScales(name, { ...option })
+            if (option.type == 'help')
+              html += this.elementHelp({ ...option })
           }
         }
         else {
@@ -282,10 +284,10 @@ export default class CalendarHeatmap {
   </div>`
 
   }
-  elementInputText(name = 'text', {value = 'Text', label = 'label', className = '', disabled = false} = {}) {
+  elementInputText(name = 'text', {value = 'Text', label = 'label', icon='', className = '', disabled = false} = {}) {
     let id = "ch-" + crypto.randomUUID();
     return `<div class="mb-1 ${className}">
-      <label for="${id}" class="form-label">${label}</label>
+      <label for="${id}" class="form-label">${label}</label>${icon}
       <input type="text" class="form-control form-control-sm" name="${name}" id="${id}" placeholder="${value}" value="${value}">
     </div>`;
   }
@@ -296,20 +298,20 @@ export default class CalendarHeatmap {
       <label for="${id}" class="col-sm-9 col-form-label">${label}</label>
     </div>`;
   }
-  elementInputRange(name = 'range', {value = -1, label = 'label', step = 1, min = 0, max = 1, className = '', disabled = false} = {}) {
+  elementInputRange(name = 'range', {value = -1, label = 'label', icon='', step = 1, min = 0, max = 1, className = '', disabled = false} = {}) {
     let id = "ch-" + crypto.randomUUID();
     return `<div class="mt-1">
     <label for="${id}" class="form-label" style="margin-bottom:-1.5rem">
-      ${label} (${min}-${max})
-    </label>
+      ${label} (${min}-${max}, default: ${value})
+    </label>${icon}
     <input type="range" class="form-range" name="${name}" id="${id}" value="${value}" min="${min}" max="${max}" step="${step}">      
     </div>`;
   }
-  elementInputSelect(name = 'select', {value = '', label = 'label', options = [], className = '', disabled = false} = {}) {
+  elementInputSelect(name = 'select', {value = '', label = 'label', icon = '', options = [], className = '', disabled = false} = {}) {
     let id = "ch-" + crypto.randomUUID();
     options = options.map( e => e.name? `<option value="${e.value}"${ e.value == value? "selected" : ""}>${e.name}</option>`: `<option value="${e}"${ e == value? "selected" : ""}>${e}</option>` )
     return `<div class="mb-2 ${className}">
-      <label for="${id}" class="form-label">${label}</label>
+      <label for="${id}" class="form-label">${label}</label>${icon}
       <select class="form-select form-select-sm" name="${name}" id="${id}">${options.join('\n')}</select>
     </div>`;
   }
@@ -334,5 +336,14 @@ export default class CalendarHeatmap {
           ${options.join('\n')}
         </div>
       </div>`;
+  }
+  elementHelp(options) {
+    let id = "ch-" + crypto.randomUUID();
+    if (options.display == 'inline')
+      return `<span>${options.content}</span>`
+    if (options.display == 'block')
+      return `<div id="${id}" class="form-text">
+        ${options.content}
+      </div>`
   }
 }
