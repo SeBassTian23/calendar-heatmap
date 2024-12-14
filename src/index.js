@@ -21,7 +21,8 @@ import i18n from './components/i18n'
 export default class CalendarHeatmap {
   constructor(width, height) {
     this.width = width || 1400;
-    this.height = height || 600;
+    this.height = height || 400;
+    this.padding = {x: 20, y: 20};
     this.menu = menu || {};
     this.layers = layers || [];
     this.settings = cloneDeep(settings) || [];
@@ -37,8 +38,8 @@ export default class CalendarHeatmap {
     // Set viewbox
     draw.viewbox(`0 0 ${this.width} ${this.height}`)
 
-    var xoffset = 20;
-    var yoffset = 20;
+    var xoffset = this.padding.x;
+    var yoffset = this.padding.y;
 
     var layout = {};
 
