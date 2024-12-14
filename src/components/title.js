@@ -16,8 +16,6 @@ const title = ( draw, { titleText = 'Main Title', fontFamily = fontfaces[0].valu
   if(textAlignment == 'end')
     x = draw.width() - x
 
-  text.move(x,y);
-
   text.font({
     family: fontFamily, 
     size: fontSize,
@@ -25,6 +23,8 @@ const title = ( draw, { titleText = 'Main Title', fontFamily = fontfaces[0].valu
     anchor: textAlignment,
     fill: fontColor
   });
+
+  text.move(x,y)
 
   return text;
 }

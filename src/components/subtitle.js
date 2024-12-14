@@ -16,8 +16,6 @@ const subtitle = ( draw, { titleText = 'Sub Title', fontFamily = fontfaces[0].va
   if(textAlignment == 'end')
     x = draw.width() - x
 
-  text.move(x,y);
-
   text.font({
     family: fontFamily, 
     size: fontSize,
@@ -26,6 +24,8 @@ const subtitle = ( draw, { titleText = 'Sub Title', fontFamily = fontfaces[0].va
     fill: fontColor,
     opacity: .75
   });
+  
+  text.move(x,y);
 
   return text;
 }

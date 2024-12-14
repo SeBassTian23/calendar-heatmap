@@ -51,12 +51,10 @@ export default class CalendarHeatmap {
         
         switch (this.settings[key].id) {
           case 'title':
-            title( draw, { ...options } );
-            yoffset += Number(options.fontSize);
+            yoffset += title( draw, { ...options, ...{y: yoffset} } ).bbox().height;
             break;
           case 'subtitle':
-            subtitle( draw, { ...options } );
-            yoffset += Number(options.fontSize);
+            yoffset += subtitle( draw, { ...options, ...{y: yoffset} } ).bbox().height;
             break;
           case 'scale':
             layout.scale = scale( draw, { ...options } );
