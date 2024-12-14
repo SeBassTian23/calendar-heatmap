@@ -16,6 +16,7 @@ import calendarMonth from './components/calendar-month'
 import calendarWeek from './components/calendar-week'
 import dataInput from './components/data'
 import {SVG} from '@svgdotjs/svg.js'
+import i18n from './components/i18n'
 
 export default class CalendarHeatmap {
   constructor(width, height) {
@@ -80,6 +81,9 @@ export default class CalendarHeatmap {
           case 'data-input':
             layout.dataInput = dataInput( draw, { ...options } );
             break;
+          case 'i18n':
+            layout.i18n = i18n( { ...options } );
+            break;            
           case 'calendar':
             calendar( draw, { ...options, ...layout, data: this.data } );
             break;

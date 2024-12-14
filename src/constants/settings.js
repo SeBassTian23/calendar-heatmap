@@ -10,6 +10,7 @@ import * as calendar from  '../components/calendar'
 import * as calendarMonth from  '../components/calendar-month'
 import * as calendarWeek from  '../components/calendar-week'
 import * as dataInput from  '../components/data'
+import * as i18n from  '../components/i18n'
 
 const settings = [
   title.settings(),
@@ -24,6 +25,7 @@ const settings = [
   calendarMonth.settings(),
   calendarWeek.settings(),
   dataInput.settings(),
+  i18n.settings(),
 ]
 
 export default settings;
@@ -33,6 +35,7 @@ export const layers = [
   "subtitle",
   "scale",
   "legend",
+  "i18n",
   "hover",
   "tooltip",
   "data-input",
@@ -51,6 +54,7 @@ export const menu = {
     "calendar-month",
     "calendar-week",
     "legend",
+    "i18n"
   ],
   "Data": [
     "data-input",

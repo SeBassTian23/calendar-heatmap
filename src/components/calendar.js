@@ -5,19 +5,21 @@
 import chroma from 'chroma-js'
 import dayjs from 'dayjs'
 import localeData from 'dayjs/plugin/localeData'
+import updateLocale from 'dayjs/plugin/updateLocale'
 import isoWeek from 'dayjs/plugin/isoWeek'
 import isToday from 'dayjs/plugin/isToday'
 import minMax from 'dayjs/plugin/minMax'
 
 dayjs.extend(localeData);
+dayjs.extend(updateLocale);
 dayjs.extend(isoWeek);
 dayjs.extend(isToday);
 dayjs.extend(minMax);
 
-import round from 'lodash/round'
 import {transformValue} from '../components/transform'
+import {monthsForLocale, weekdaysForLocale} from '../components/i18n'
 
-const calendar = ( draw, {x, y, data = [], weekStart = 1, tileSize = 16, tileColor = "#dddddd", tileFuture = true, tileShape= "rectangle", tilePadding = 4.5, monthPadding = 10, monthGap = true, calendarMonthLabels = false, calendarWeekLabels = false,  scale = false, legend = false, transform = false, tooltip = false, dataInput = false } = {}) => {
+const calendar = ( draw, {x, y, data = [], weekStart = 1, tileSize = 16, tileColor = "#dddddd", tileFuture = true, tileShape= "rectangle", tilePadding = 4.5, monthPadding = 10, monthGap = true, calendarMonthsWrap = 12, calendarMonthLabels = false, calendarWeekLabels = false,  scale = false, legend = false, transform = false, tooltip = false, dataInput = false, i18n = false } = {}) => {
 
   // Initial variables
   let offset_x = x;
@@ -55,6 +57,25 @@ const calendar = ( draw, {x, y, data = [], weekStart = 1, tileSize = 16, tileCol
     startDate = minMonth.startOf('month')
     months = Math.ceil(maxMonth.diff(minMonth, 'month', true))
   }
+
+  // Locale based formates
+  dayjs.updateLocale("en", {
+    months: function (dayjsInstance, format) {
+      if (i18n)
+        return monthsForLocale(i18n.locale, 'long')[dayjsInstance.month()]
+      else
+        return monthsForLocale('en', 'long')[dayjsInstance.month()]
+    },
+    monthsShort: function (dayjsInstance, format) {
+      if (i18n)
+        return monthsForLocale(i18n.locale, 'short')[dayjsInstance.month()]
+      else
+        return monthsForLocale('en', 'short')[dayjsInstance.month()]
+    },
+    weekdays: weekdaysForLocale(i18n.locale || 'en', 'long'),
+    weekdaysShort: weekdaysForLocale(i18n.locale || 'en', 'long').map(el => el.substring(0,3)),
+    weekdaysMin: weekdaysForLocale(i18n.locale || 'en', 'short'),
+  });
 
   // Color Scale
   let colors = [] 
@@ -167,7 +188,7 @@ const calendar = ( draw, {x, y, data = [], weekStart = 1, tileSize = 16, tileCol
         if(tooltip && tile){
           let tip = startDate.format( tooltip.format );
           if(tooltip.data){
-            tip = dayData? `${value !== null? `${value}${legend? legend.suffix : ''}` : 'NaN' } on ${tip}` : tip
+            tip = dayData? `${value !== null? `${Intl.NumberFormat(i18n.locale || "en", { maximumSignificantDigits: 4 }).format(value)}${legend? legend.suffix : ''}` : 'NaN' } on ${tip}` : tip
           }
           tile.add( draw.element('title').words( tip ) );
         }
@@ -231,7 +252,7 @@ const calendar = ( draw, {x, y, data = [], weekStart = 1, tileSize = 16, tileCol
 
   // Legend
   if(legend){
-    offset_y = drawLegend( draw, offset_x, offset_y, colors, minData, maxData, tileShape, tileBorder, tileSize, tilePadding, monthGap, monthPadding, legend, transform, tooltip );
+    offset_y = drawLegend( draw, offset_x, offset_y, colors, minData, maxData, tileShape, tileBorder, tileSize, tilePadding, monthGap, monthPadding, legend, transform, tooltip, i18n );
   }
   
   // Set size and viewbox
@@ -239,7 +260,7 @@ const calendar = ( draw, {x, y, data = [], weekStart = 1, tileSize = 16, tileCol
   draw.size(viewboxWidth, offset_y+30);
 
   draw.viewbox(`0 0 ${ viewboxWidth   } ${draw.height()}`);
-  
+
   return null;
 }
 
@@ -319,7 +340,7 @@ const drawTile = ( draw, x, y, shape, size, color, border ) => {
 }
 
 // Draw the legend
-const drawLegend = ( draw, x, y, colors, min, max, tileShape, tileBorder, tileSize, tilePadding, gap, gapPadding, legend, transform, tooltip ) => {
+const drawLegend = ( draw, x, y, colors, min, max, tileShape, tileBorder, tileSize, tilePadding, gap, gapPadding, legend, transform, tooltip, i18n ) => {
 
   // Legend
   let legendMin = Number.isFinite(min)? min : 'Min'
@@ -341,9 +362,14 @@ const drawLegend = ( draw, x, y, colors, min, max, tileShape, tileBorder, tileSi
     x_init = (x/2) - ( (colors.length * (tilePadding + tileSize)) / 2 ) ;
 
   if (transform){
-    legendMin = round(transformValue(min, transform.fn),2) || 'Min'
-    legendMax = round(transformValue(max, transform.fn),2) || 'Max'
+    legendMin = transformValue(min, transform.fn) || 'Min'
+    legendMax = transformValue(max, transform.fn) || 'Max'
   }
+
+  const NumberFormat = new Intl.NumberFormat(i18n.locale || "en", { maximumSignificantDigits: 4 })
+
+  if(legendMin != 'Min') legendMin = NumberFormat.format(legendMin)
+  if(legendMax != 'Max') legendMax = NumberFormat.format(legendMax)
 
   if(legend.suffix != ''){
     if(legendMin != 'Min') legendMin += legend.suffix;
@@ -369,9 +395,9 @@ const drawLegend = ( draw, x, y, colors, min, max, tileShape, tileBorder, tileSi
       group.add(text);
     }
 
-    if(tooltip && tile){
+    if(tooltip && tile && isFinite(min) && isFinite(max) ){
       let bins = createBins( transformValue(min, transform.fn), transformValue(max, transform.fn), colors.length);
-      let tip = `${round(bins[s][0],2)}${legend.suffix} to ${round(bins[s][1],2)}${legend.suffix}`
+      let tip = `${NumberFormat.format(bins[s][0])}${legend.suffix} to ${NumberFormat.format(bins[s][1])}${legend.suffix}`
       tile.add( draw.element('title').words( tip ) );
     }
     group.add(tile);
