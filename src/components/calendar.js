@@ -54,7 +54,7 @@ const calendar = ( draw, {x, y, data = [], weekStart = 1, tileSize = 16, tileCol
   }
   
   // Weekday Labels
-  let weekdays = [];
+  let weekdays = [...Array(7).keys()];
   let weeklabelWidth = 0;
   if(calendarWeekLabels){
     if(calendarWeekLabels.format == 'dd') weekdays = dayjs.weekdaysMin();
