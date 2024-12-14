@@ -253,7 +253,7 @@ export const settings = () => {
     "disabled": true,
     "options": [
       { "type": "range", "name": "tileSize", "value": 16, "label": "Tile Size", "step": 0.5, "min": 2, "max": 30 },
-      { "type": "select", "name": "tileShape", "value": 'rectangle', options: ["rectangle", "circle"], "label": "Tile Shape"},
+      { "type": "select", "name": "tileShape", "value": 'rectangle', options: ["rectangle", "rectangle (rounded)", "circle"], "label": "Tile Shape"},
       { "type": "color", "name": "tileColor", "value": "#dddddd", "label": "Tile Color" },
       { "type": "check", "name": "tileFuture", "value": true, "label": "Future Days (lighten color)" },
       { "type": "range", "name": "tilePadding", "value": 4.5, "label": "Tile Padding", "step": 0.5, "min": 0, "max": 10 },
@@ -311,6 +311,9 @@ const drawTile = ( draw, x, y, shape, size, color, border ) => {
     tile = draw.rect(size, size)
             .fill({ color, opacity: 1 }).move( x, y )
             .stroke({ color: border, opacity: 0.75, width: 1 })
+
+  if(shape == 'rectangle (rounded)')
+    tile.radius(size * .2)
 
   return tile;
 }
