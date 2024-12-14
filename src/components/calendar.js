@@ -42,6 +42,15 @@ const calendar = ( draw, {x, y, data = [], weekStart = 1, tileSize = 16, tileCol
   let minData = Math.min( ...data.filter(e=> (e.value || e[dataInput.valueColumn]) !== null).map( e => e.value || e[dataInput.valueColumn]) )
   let maxData = Math.max( ...data.filter(e=> (e.value || e[dataInput.valueColumn]) !== null).map( e => e.value || e[dataInput.valueColumn]) )
 
+  // Format the date column to make the rendering later on faster
+  let dataFormatted = data.map( e => {
+    if (e.date !==undefined)
+      e.date = dayjs(e.date).format('YYYY-MM-DD');
+    else
+      e[dataInput.dateColumn] = dayjs(e[dataInput.dateColumn]).format('YYYY-MM-DD');
+    return e;
+  });
+
   if(minMonth && dataInput){
     startDate = minMonth.startOf('month')
     months = Math.ceil(maxMonth.diff(minMonth, 'month', true))
@@ -129,7 +138,8 @@ const calendar = ( draw, {x, y, data = [], weekStart = 1, tileSize = 16, tileCol
         let value = null;
 
         if(scale && data.length > 0){
-          dayData = data.find( e => dayjs(e.date || e[dataInput.dateColumn]).format('YYYY-MM-DD') == startDate.format('YYYY-MM-DD') ) || null;
+          let startDateFormatted = startDate.format('YYYY-MM-DD')
+          dayData = dataFormatted.find( e => e[dataInput.dateColumn] == startDateFormatted ) || null;
           if(dayData){
 
             value = (dayData.value || dayData[dataInput.valueColumn]);
