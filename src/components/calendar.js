@@ -186,7 +186,7 @@ const calendar = ( draw, {x, y, data = [], weekStart = 1, tileSize = 16, tileCol
 
         // Add tiles to group
         group.add(tile);
-  
+
         // Add next day
         startDate = startDate.add(1, 'day');
         day_count++
@@ -194,7 +194,7 @@ const calendar = ( draw, {x, y, data = [], weekStart = 1, tileSize = 16, tileCol
     }
 
     // Add the label
-    if(calendarMonthLabels){
+    if(calendarMonthLabels && calendarMonthLabels.format !== ""){
       let text = draw.plain(startDate.subtract(1, 'day').format(calendarMonthLabels.format));
       if(calendarMonthLabels.textAlignment == 'middle') {
         text.move( offset_x + ( tileSize + x - offset_x )/2, end_y + Number(calendarMonthLabels.fontSize) + tilePadding );
@@ -213,8 +213,6 @@ const calendar = ( draw, {x, y, data = [], weekStart = 1, tileSize = 16, tileCol
         anchor: calendarMonthLabels.textAlignment,
         fill: calendarMonthLabels.fontColor
       });
-
-
     }
 
     // calculate offset for next month
@@ -226,7 +224,8 @@ const calendar = ( draw, {x, y, data = [], weekStart = 1, tileSize = 16, tileCol
   // calculate offset
   offset_y += (tileSize * 7) + (tilePadding * 6) + tileSize * 1.5
 
-  if(calendarMonthLabels){
+  // add offset only if there is a string
+  if(calendarMonthLabels && calendarMonthLabels.format !== ""){
     offset_y += Number(calendarMonthLabels.fontSize)
   }
 
