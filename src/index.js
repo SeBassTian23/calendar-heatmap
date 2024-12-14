@@ -332,7 +332,7 @@ export default class CalendarHeatmap {
       });
     return `<div class="mb-1 ${className}">
         <label class="form-check-label mb-1">${label}</label>
-        <div class="p-1" style="overflow-y:auto; display:flex; flex-wrap: wrap; column-gap: 5px; height:10.2rem;">
+        <div class="p-1" style="display:flex; flex-wrap: wrap; column-gap: 5px;">
           ${options.join('\n')}
         </div>
       </div>`;
