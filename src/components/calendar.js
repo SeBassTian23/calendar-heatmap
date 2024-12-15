@@ -346,6 +346,7 @@ const drawLegend = ( draw, x, y, colors, min, max, tileShape, tileBorder, tileSi
   let legendMin = Number.isFinite(min)? min : 'Min'
   let legendMax = Number.isFinite(max)? max : 'Max'
   let x_init = x
+  let labelOffset = 0;
 
   let group = draw.group();
 
@@ -384,7 +385,6 @@ const drawLegend = ( draw, x, y, colors, min, max, tileShape, tileBorder, tileSi
     // Add labels
     if( (s == 0 || s == colors.length-1) && legend.labels ){
       var text = draw.plain(s==0? legendMin : legendMax);
-      text.move( tile.x() + (tileSize / 2) , y + Number(legend.fontSize) + tilePadding / 2 );
       text.font({
         family: legend.fontFamily,
         size: legend.fontSize,
@@ -392,6 +392,8 @@ const drawLegend = ( draw, x, y, colors, min, max, tileShape, tileBorder, tileSi
         anchor: 'middle',
         fill: legend.fontColor
       });
+      labelOffset = text.bbox().h 
+      text.amove( tile.x() + (tileSize / 2) , y + tileSize + labelOffset );
       group.add(text);
     }
 
@@ -403,6 +405,6 @@ const drawLegend = ( draw, x, y, colors, min, max, tileShape, tileBorder, tileSi
     group.add(tile);
   }
 
-  return y += tileSize;
+  return y += tileSize + labelOffset;
 
 }
