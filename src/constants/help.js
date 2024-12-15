@@ -1,6 +1,7 @@
 export const helpentries = {
   "DATEFORMAT": "Available formats:\n\nYY - Two-digit year\nYYYY - Four-digit year\n\nM - 1-12\nMM - 01-12\nMMM - Jan-Dec\nMMMM - January-December\n\nD - Day 0-31\nDD - Day 01-31",
-  "LOCALES": "Set the language for number format, month and weekday labels (default: English)"
+  "LOCALES": "Set the language for number format, month and weekday labels (default: English)",
+  "MONTHWRAP": "Select the number of months after which the following months wrap into the next row"
 }
 
 const help = (entry=null, {display="inline"} = {}) => {

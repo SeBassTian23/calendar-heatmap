@@ -18,10 +18,12 @@ dayjs.extend(minMax);
 
 import {transformValue} from '../components/transform'
 import {monthsForLocale, weekdaysForLocale} from '../components/i18n'
+import help from "../constants/help";
 
-const calendar = ( draw, {x, y, data = [], weekStart = 1, tileSize = 16, tileColor = "#dddddd", tileFuture = true, tileShape= "rectangle", tilePadding = 4.5, monthPadding = 10, monthGap = true, calendarMonthsWrap = 12, calendarMonthLabels = false, calendarWeekLabels = false,  scale = false, legend = false, transform = false, tooltip = false, dataInput = false, i18n = false } = {}) => {
+const calendar = ( draw, {x, y, data = [], weekStart = 1, tileSize = 16, tileColor = "#dddddd", tileFuture = true, tileShape= "rectangle", tilePadding = 4.5, monthPadding = 10, monthGap = true, monthsWrapAfter = 12, monthsRowsReverse=false, calendarMonthLabels = false, calendarWeekLabels = false,  scale = false, legend = false, transform = false, tooltip = false, dataInput = false, i18n = false } = {}) => {
 
   // Initial variables
+  let initial_x = x
   let offset_x = x;
   let offset_y = y;
   let end_y = offset_y;
@@ -55,8 +57,8 @@ const calendar = ( draw, {x, y, data = [], weekStart = 1, tileSize = 16, tileCol
   });
 
   if(minMonth && dataInput){
-    startDate = minMonth.startOf('month')
-    months = Math.ceil(maxMonth.diff(minMonth, 'month', true))
+    startDate = minMonth.startOf('month');
+    months = Math.ceil(maxMonth.diff(minMonth, 'month', true));
   }
 
   // Locale based formates
@@ -98,8 +100,24 @@ const calendar = ( draw, {x, y, data = [], weekStart = 1, tileSize = 16, tileCol
     offset_x += weeklabelWidth;
   }
 
+  let groupROW = null;
+
   // Build calendar months
   for(let t=0; t<months; t++){
+    
+    if(!groupROW)
+      groupROW = draw.group().addClass('row');
+
+    let wrap = false;
+    if (t > 0 && t%monthsWrapAfter == 0){
+      offset_x = initial_x + weeklabelWidth;
+      y = offset_y += (tileSize * 7) + (tilePadding * 6) + tileSize * 2;
+      if(calendarMonthLabels && calendarMonthLabels.format !== ""){
+        offset_y += monthLabelHeight
+      }
+      wrap = true
+      groupROW = draw.group().addClass('row');
+    }
 
     let group = draw.group();
 
@@ -119,9 +137,12 @@ const calendar = ( draw, {x, y, data = [], weekStart = 1, tileSize = 16, tileCol
         if(month_days < day_count)
           continue;
 
-        // Add Weekday Labels before the first month
-        if(t == 0 && m == 0 && calendarWeekLabels){
+        // Calculate x,y positions
+        x = (offset_x + ((tilePadding + tileSize) * m))
+        y = (offset_y + ((tilePadding + tileSize) * w))
 
+        // Add Weekday Labels before the first month
+        if((t == 0 || wrap) && m == 0 && calendarWeekLabels){
           // Add Labels at positions 0, 2, 4, 6
           if([0,2,4,6].indexOf(w) > -1){
             let text = draw.text(weekdays[(w+weekStart) % weekdays.length]);
@@ -133,6 +154,7 @@ const calendar = ( draw, {x, y, data = [], weekStart = 1, tileSize = 16, tileCol
               fill: calendarWeekLabels.fontColor
             });
             text.move(offset_x - (weeklabelWidth - tilePadding) , y -2 );
+            group.add(text);
           }
         }
 
@@ -234,12 +256,33 @@ const calendar = ( draw, {x, y, data = [], weekStart = 1, tileSize = 16, tileCol
       }
 
       monthLabelHeight = text.bbox().h
+
+      // Add month label
+      group.add(text);
+      groupROW.add(group);
     }
 
     // calculate offset for next month
     offset_x = x;
     if(monthGap)
       offset_x += monthPadding + tileSize;
+  }
+
+  // Reverse the order of rows
+  if (monthsRowsReverse) {
+    let groups = draw.find(".row");
+  
+    // Create array of groups with their positions
+    let groupsWithPos = []
+    groups.each(group => {
+      let bbox = group.bbox();
+      groupsWithPos.push({ 'x': bbox.x, 'y': bbox.y})
+    });
+  
+    // Sort by position in reverse order and move groups to new positions
+    groupsWithPos.reverse().forEach((item, index) => {
+      groups[index].move(item.x, item.y)
+    });
   }
 
   // calculate offset
@@ -277,9 +320,11 @@ export const settings = () => {
       { "type": "select", "name": "tileShape", "value": 'rectangle', options: ["rectangle", "rectangle (rounded)", "circle"], "label": "Tile Shape"},
       { "type": "color", "name": "tileColor", "value": "#dddddd", "label": "Tile Color" },
       { "type": "check", "name": "tileFuture", "value": true, "label": "Future Days (lighten color)" },
+      { "type": "separator" },
       { "type": "range", "name": "tilePadding", "value": 4.5, "label": "Tile Padding", "step": 0.5, "min": 0, "max": 10 },
       { "type": "range", "name": "monthPadding", "value": 10, "label": "Month Padding", "step": 1, "min": 0, "max": 50 },
       { "type": "check", "name": "monthGap", "value": true, "label": "Gap between Months" },
+      { "type": "separator" },
       { "type": "select", "name": "weekStart", "value": 0, options: [
           {value: 1, name: 'Monday'},
           {value: 2, name: 'Tuesday'},
@@ -289,6 +334,9 @@ export const settings = () => {
           {value: 6, name: 'Saturday'},
           {value: 0, name: 'Sunday'},
         ], "label": "Week Start"},
+      { "type": "separator" },
+      { "type": "range", "name": "monthsWrapAfter", "value": 12, "label": "Months Wrap", icon: help("MONTHWRAP", {display: "info-icon"}), "step": 1, "min": 1, "max": 24 },
+      { "type": "check", "name": "monthsRowsReverse", "value": false, "label": "Reverse Row Order" },
     ]
   }
 }

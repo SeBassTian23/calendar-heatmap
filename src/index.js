@@ -235,6 +235,8 @@ export default class CalendarHeatmap {
               html += this.elementInputScales(name, { ...option })
             if (option.type == 'help')
               html += this.elementHelp({ ...option })
+            if (option.type == 'separator')
+              html += `<div class="separator"><hr></div>`
           }
         }
         else {
