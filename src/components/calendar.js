@@ -23,10 +23,11 @@ const calendar = ( draw, {x, y, data = [], weekStart = 1, tileSize = 16, tileCol
 
   // Initial variables
   let offset_x = x;
-  let offset_y = y + 20;
+  let offset_y = y;
   let end_y = offset_y;
   let max_x = 0
   let tileBorder = chroma(tileColor).darken(2).hex();
+  let monthLabelHeight = 0
 
   // Parse size as Number
   tileSize = Number(tileSize)
@@ -131,13 +132,9 @@ const calendar = ( draw, {x, y, data = [], weekStart = 1, tileSize = 16, tileCol
               anchor: calendarWeekLabels.textAlignment,
               fill: calendarWeekLabels.fontColor
             });
-            text.move(offset_x - (weeklabelWidth - tilePadding) , y + Number(calendarWeekLabels.fontSize) + 1 );
+            text.move(offset_x - (weeklabelWidth - tilePadding) , y -2 );
           }
         }
-        
-        // Calculate x,y positions
-        x = (offset_x + ((tilePadding + tileSize) * m))
-        y = (offset_y + ((tilePadding + tileSize) * w))
 
         if(x> max_x)
           max_x = x;
@@ -217,16 +214,7 @@ const calendar = ( draw, {x, y, data = [], weekStart = 1, tileSize = 16, tileCol
     // Add the label
     if(calendarMonthLabels && calendarMonthLabels.format !== ""){
       let text = draw.plain(startDate.subtract(1, 'day').format(calendarMonthLabels.format));
-      if(calendarMonthLabels.textAlignment == 'middle') {
-        text.move( offset_x + ( tileSize + x - offset_x )/2, end_y + Number(calendarMonthLabels.fontSize) + tilePadding );
-      }
-      else if(calendarMonthLabels.textAlignment == 'end') {
-        text.move( (x + tileSize), end_y + Number(calendarMonthLabels.fontSize) + tilePadding);
-      }
-      else {
-        text.move(offset_x, end_y + Number(calendarMonthLabels.fontSize) + tilePadding );
-      }
-  
+
       text.font({
         family: calendarMonthLabels.fontFamily, 
         size: calendarMonthLabels.fontSize,
@@ -234,6 +222,18 @@ const calendar = ( draw, {x, y, data = [], weekStart = 1, tileSize = 16, tileCol
         anchor: calendarMonthLabels.textAlignment,
         fill: calendarMonthLabels.fontColor
       });
+
+      if(calendarMonthLabels.textAlignment == 'middle') {
+        text.amove( offset_x + ( tileSize + x - offset_x )/2, (end_y + tilePadding + tileSize) + text.bbox().h );
+      }
+      else if(calendarMonthLabels.textAlignment == 'end') {
+        text.amove( (x + tileSize), (end_y + tilePadding + tileSize) + text.bbox().h );
+      }
+      else {
+        text.amove(offset_x, (end_y + tilePadding + tileSize) + text.bbox().h );
+      }
+
+      monthLabelHeight = text.bbox().h
     }
 
     // calculate offset for next month
@@ -247,7 +247,7 @@ const calendar = ( draw, {x, y, data = [], weekStart = 1, tileSize = 16, tileCol
 
   // add offset only if there is a string
   if(calendarMonthLabels && calendarMonthLabels.format !== ""){
-    offset_y += Number(calendarMonthLabels.fontSize)
+    offset_y += monthLabelHeight
   }
 
   // Legend

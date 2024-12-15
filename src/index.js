@@ -53,10 +53,10 @@ export default class CalendarHeatmap {
         
         switch (this.settings[key].id) {
           case 'title':
-            yoffset += title( draw, { ...options, ...{y: yoffset} } ).bbox().height;
+            yoffset += title( draw, { ...options } ).bbox().height;
             break;
           case 'subtitle':
-            yoffset += subtitle( draw, { ...options, ...{y: yoffset} } ).bbox().height;
+            yoffset += subtitle( draw, { ...options } ).bbox().height;
             break;
           case 'scale':
             layout.scale = scale( draw, { ...options } );
@@ -86,6 +86,8 @@ export default class CalendarHeatmap {
             layout.i18n = i18n( { ...options } );
             break;            
           case 'calendar':
+            // Gap between titles and calendar
+            options.y += this.padding.y
             calendar( draw, { ...options, ...layout, data: this.data } );
             break;
         }
