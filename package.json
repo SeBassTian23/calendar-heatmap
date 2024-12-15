@@ -1,6 +1,6 @@
 {
   "name": "svg-calendar-heatmap",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Create an SVG calendar heatmap from time series data",
   "main": "index.js",
   "scripts": {
