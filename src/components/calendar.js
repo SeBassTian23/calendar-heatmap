@@ -44,8 +44,8 @@ const calendar = ( draw, {x, y, data = [], weekStart = 1, tileSize = 16, tileCol
   let minMonth = dayjs.min( ...data.map( e => dayjs(e.date || e[dataInput.dateColumn]) )) || null
   let maxMonth = dayjs.max( ...data.map( e => dayjs(e.date || e[dataInput.dateColumn]) )) || null
 
-  let minData = Math.min( ...data.filter(e=> (e.value || e[dataInput.valueColumn]) !== null).map( e => e.value || e[dataInput.valueColumn]) )
-  let maxData = Math.max( ...data.filter(e=> (e.value || e[dataInput.valueColumn]) !== null).map( e => e.value || e[dataInput.valueColumn]) )
+  let minData = Math.min( ...data.filter(e=> (e.value || e[dataInput.valueColumn]) !== null && !isNaN( e.value || e[dataInput.valueColumn] )).map( e => e.value || e[dataInput.valueColumn]) )
+  let maxData = Math.max( ...data.filter(e=> (e.value || e[dataInput.valueColumn]) !== null && !isNaN( e.value || e[dataInput.valueColumn] )).map( e => e.value || e[dataInput.valueColumn]) )
 
   // Format the date column to make the rendering later on faster
   let dataFormatted = data.map( e => {
