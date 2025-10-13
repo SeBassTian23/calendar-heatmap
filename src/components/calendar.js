@@ -153,6 +153,7 @@ const calendar = ( draw, {x, y, data = [], weekStart = 1, tileSize = 16, tileCol
               anchor: calendarWeekLabels.textAlignment,
               fill: calendarWeekLabels.fontColor
             });
+            text.addClass('calendar-week');
             text.move(offset_x - (weeklabelWidth - tilePadding) , y -2 );
             group.add(text);
           }
@@ -217,6 +218,13 @@ const calendar = ( draw, {x, y, data = [], weekStart = 1, tileSize = 16, tileCol
           tileColor = chroma(tileColor).brighten(0.5);
         }
 
+        // Add classes for Darkmode
+        if(currentTileColor == scale.nodata)
+          tile.addClass('no-data')
+
+        if( startDate.isAfter(dayjs()) )
+          tile.addClass('future')
+
         if( end_y < y)
           end_y = y;
 
@@ -244,6 +252,7 @@ const calendar = ( draw, {x, y, data = [], weekStart = 1, tileSize = 16, tileCol
         anchor: calendarMonthLabels.textAlignment,
         fill: calendarMonthLabels.fontColor
       });
+      text.addClass('calendar-month');
 
       if(calendarMonthLabels.textAlignment == 'middle') {
         text.amove( offset_x + ( tileSize + x - offset_x )/2, (end_y + tilePadding + tileSize) + text.bbox().h );
@@ -440,6 +449,7 @@ const drawLegend = ( draw, x, y, colors, min, max, tileShape, tileBorder, tileSi
         anchor: 'middle',
         fill: legend.fontColor
       });
+      text.addClass('legend');
       labelOffset = text.bbox().h 
       text.amove( tile.x() + (tileSize / 2) , y + tileSize + labelOffset );
       group.add(text);

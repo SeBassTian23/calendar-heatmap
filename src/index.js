@@ -10,6 +10,7 @@ import scale from './components/scale'
 import legend from './components/legend'
 import transform from './components/transform'
 import tooltip from './components/tooltip'
+import darkmode from './components/darkmode'
 import hover from './components/hover'
 import calendar from './components/calendar'
 import calendarMonth from './components/calendar-month'
@@ -17,6 +18,7 @@ import calendarWeek from './components/calendar-week'
 import dataInput from './components/data'
 import {SVG} from '@svgdotjs/svg.js'
 import i18n from './components/i18n'
+import generateDarkColor from './helpers/generateDarkColor'
 
 export default class CalendarHeatmap {
   constructor(width, height) {
@@ -40,6 +42,29 @@ export default class CalendarHeatmap {
 
     var xoffset = this.padding.x;
     var yoffset = this.padding.y;
+
+    // Set up defs for darkmode
+    if( this.settings.find( itm => itm.id == 'darkmode')?.show ){
+      var defs = draw.defs();
+
+      let style = []
+      for(let i in this.settings){
+        if( this.settings[i].options.find( itm => itm.name == 'fontColor') ){
+          style.push(` .${this.settings[i].id} { fill: ${ generateDarkColor(this.settings[i].options.find( itm => itm.name == 'fontColor')?.value)} !important;}`)
+        }
+        if( this.settings[i].options.find( itm => itm.name == 'tileFuture')?.value ){
+          style.push(` .future { fill: ${ generateDarkColor(this.settings[i].options.find( itm => itm.name == 'tileColor')?.value)} !important;}`)
+          console.log(this.settings[i].options.find( itm => itm.name == 'tileColor')?.value , generateDarkColor(this.settings[i].options.find( itm => itm.name == 'tileColor')?.value))
+        }
+      }
+
+      let styleContent = '@media (prefers-color-scheme: dark) {\n';
+      styleContent += style.join('\n');
+      styleContent += '\n}';
+
+      defs.element('style').words(styleContent);
+
+    }
 
     var layout = {};
 
@@ -72,6 +97,9 @@ export default class CalendarHeatmap {
             break;
           case 'hover':
             layout.hover = hover( draw, { ...options } );
+            break;         
+          case 'darkmode':
+            layout.darkmode = darkmode( draw, { ...options } );
             break;         
           case 'calendar-month':
             layout.calendarMonthLabels = calendarMonth( draw, { ...options } );

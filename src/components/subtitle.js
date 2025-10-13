@@ -27,6 +27,8 @@ const subtitle = ( draw, { titleText = 'Sub Title', fontFamily = fontfaces[0].va
   
   text.move(x,y);
 
+  text.addClass('sub-title')
+
   return text;
 }
 

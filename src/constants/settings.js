@@ -6,6 +6,7 @@ import * as labels from  '../components/labels'
 import * as hover from  '../components/hover'
 import * as transform from  '../components/transform'
 import * as tooltip from  '../components/tooltip'
+import * as darkmode from  '../components/darkmode'
 import * as calendar from  '../components/calendar'
 import * as calendarMonth from  '../components/calendar-month'
 import * as calendarWeek from  '../components/calendar-week'
@@ -21,6 +22,7 @@ const settings = [
   hover.settings(),
   transform.settings(),
   tooltip.settings(),
+  darkmode.settings(),
   calendar.settings(),
   calendarMonth.settings(),
   calendarWeek.settings(),
@@ -64,5 +66,6 @@ export const menu = {
   "Interactivity": [
     "hover",
     "tooltip",
+    "darkmode",
   ]
 };

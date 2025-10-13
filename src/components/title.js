@@ -26,6 +26,8 @@ const title = ( draw, { titleText = 'Main Title', fontFamily = fontfaces[0].valu
 
   text.move(x,y)
 
+  text.addClass('title')
+
   return text;
 }
 
