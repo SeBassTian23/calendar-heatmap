@@ -26,6 +26,7 @@ const calendar = ( draw, {x, y, data = [], weekStart = 1, tileSize = 16, tileCol
   let initial_x = x
   let offset_x = x;
   let offset_y = y;
+  let offset_x_max = x;
   let end_y = offset_y;
   let max_x = 0
   let tileBorder = chroma(tileColor).darken(2).hex();
@@ -94,9 +95,19 @@ const calendar = ( draw, {x, y, data = [], weekStart = 1, tileSize = 16, tileCol
     if(calendarWeekLabels.format == 'ddd') weekdays = dayjs.weekdaysShort();
     if(calendarWeekLabels.format == 'dddd') weekdays = dayjs.weekdays();
 
-    // Hack to guess the spacing, since we can't use text.length()
-    let fontFactor = (calendarWeekLabels.format == 'dddd')? 1.6 : 1.1; 
-    weeklabelWidth = Math.max( ...weekdays.map(e => e.length)) * ( calendarWeekLabels.fontSize / fontFactor );
+    // Calculate weeklabelWidth as offset
+    [0,2,4,6].forEach( wd => {
+      let text = draw.text(weekdays[(wd+weekStart) % weekdays.length]);
+      text.font({
+        family: calendarWeekLabels.fontFamily, 
+        size: calendarWeekLabels.fontSize,
+        weight: calendarWeekLabels.fontWeight,
+      });
+      if(weeklabelWidth < text.bbox().w)
+        weeklabelWidth = text.bbox().w + 5 + tilePadding;
+      text.remove();
+    });
+
     offset_x += weeklabelWidth;
   }
 
@@ -275,6 +286,9 @@ const calendar = ( draw, {x, y, data = [], weekStart = 1, tileSize = 16, tileCol
     offset_x = x;
     if(monthGap)
       offset_x += monthPadding + tileSize;
+
+    if(offset_x_max < offset_x)
+      offset_x_max = offset_x;
   }
 
   // Reverse the order of rows
@@ -304,7 +318,7 @@ const calendar = ( draw, {x, y, data = [], weekStart = 1, tileSize = 16, tileCol
 
   // Legend
   if(legend){
-    offset_y = drawLegend( draw, offset_x, offset_y, colors, minData, maxData, tileShape, tileBorder, tileSize, tilePadding, monthGap, monthPadding, legend, transform, tooltip, i18n );
+    offset_y = drawLegend( draw, offset_x_max, offset_y, colors, minData, maxData, tileShape, tileBorder, tileSize, tilePadding, monthGap, monthPadding, legend, transform, tooltip, i18n );
   }
   
   // Set size and viewbox
@@ -358,7 +372,7 @@ function createBins(min, max, numBins) {
   const bins = [];
 
   for (let i = 0; i < numBins; i++) {
-    bins.push([i * step + min, (i + 1) * step + min]); 
+    bins.push([i * step + min, i == numBins-1?  max : (i + 1) * step + min]);
   }
 
   return bins;
@@ -434,10 +448,27 @@ const drawLegend = ( draw, x, y, colors, min, max, tileShape, tileBorder, tileSi
     if(legendMax != 'Max') legendMax += legend.suffix;
   }
 
+  // Legend padding
+  var y_pad = 0;
+
+  if(legend.position != 'center'){
+    var text_tmp = draw.plain( legend.position == 'right'? legendMax : legendMin );
+    text_tmp.font({
+      family: legend.fontFamily,
+      size: legend.fontSize,
+      weight: legend.fontWeight,
+    });
+    y_pad = text_tmp.bbox().w / 2;
+    text_tmp.remove();
+
+    if(legend.position == 'right')
+      y_pad = (y_pad + 10) * -1
+  }
+
   for(let s = 0; s < colors.length; s++){    
 
     // Add tile
-    let tile = drawTile( draw, (x_init + ((tilePadding + tileSize) * s)), y, tileShape, tileSize, colors[s], tileBorder );
+    let tile = drawTile( draw, (x_init + y_pad + ((tilePadding + tileSize) * s)), y, tileShape, tileSize, colors[s], tileBorder );
 
     // Add labels
     if( (s == 0 || s == colors.length-1) && legend.labels ){
