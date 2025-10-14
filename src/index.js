@@ -313,7 +313,7 @@ export default class CalendarHeatmap {
       <label class="form-check-label" for="${id}">${label}</label>
     </div>`;
   }
-  elementInputSwitch(name = 'switch', {value = true, label = 'label', className = '', disabled = false} = {}) {
+  #elementInputSwitch(name = 'switch', {value = true, label = 'label', className = '', disabled = false} = {}) {
     let id = "ch-" + crypto.randomUUID();
     return `<div class="form-check form-switch fs-6" style="position:relative; margin:-2.1rem .5rem .6rem .5rem; z-index:10; width:2em;">
     <input class="form-check-input" type="checkbox" role="switch" name="${name}" value="${true}" id="${id}" ${value ? 'checked' : ''} ${disabled ? 'disabled' : ''}>
@@ -321,21 +321,21 @@ export default class CalendarHeatmap {
   </div>`
 
   }
-  elementInputText(name = 'text', {value = 'Text', label = 'label', icon='', className = '', disabled = false} = {}) {
+  #elementInputText(name = 'text', {value = 'Text', label = 'label', icon='', className = '', disabled = false} = {}) {
     let id = "ch-" + crypto.randomUUID();
     return `<div class="mb-1 ${className}">
       <label for="${id}" class="form-label">${label}</label>${icon}
       <input type="text" class="form-control form-control-sm" name="${name}" id="${id}" placeholder="${value}" value="${value}">
     </div>`;
   }
-  elementInputColor(name = 'color', {value = '#000000', label = 'label', className = '', disabled = false} = {} ) {
+  #elementInputColor(name = 'color', {value = '#000000', label = 'label', className = '', disabled = false} = {} ) {
     let id = "ch-" + crypto.randomUUID();
     return `<div class="d-flex mb-1 ${className}">
       <input type="color" class="form-control form-control-color" name="${name}" id="${id}" value="${value}" title="Choose ${label} color">
       <label for="${id}" class="col-sm-9 col-form-label">${label}</label>
     </div>`;
   }
-  elementInputRange(name = 'range', {value = -1, label = 'label', icon='', step = 1, min = 0, max = 1, className = '', disabled = false} = {}) {
+  #elementInputRange(name = 'range', {value = -1, label = 'label', icon='', step = 1, min = 0, max = 1, className = '', disabled = false} = {}) {
     let id = "ch-" + crypto.randomUUID();
     return `<div class="mt-1">
     <label for="${id}" class="form-label" style="margin-bottom:-1.5rem">
@@ -344,7 +344,7 @@ export default class CalendarHeatmap {
     <input type="range" class="form-range" name="${name}" id="${id}" value="${value}" min="${min}" max="${max}" step="${step}">      
     </div>`;
   }
-  elementInputSelect(name = 'select', {value = '', label = 'label', icon = '', options = [], className = '', disabled = false} = {}) {
+  #elementInputSelect(name = 'select', {value = '', label = 'label', icon = '', options = [], className = '', disabled = false} = {}) {
     let id = "ch-" + crypto.randomUUID();
     options = options.map( e => e.name? `<option value="${e.value}"${ e.value == value? "selected" : ""}>${e.name}</option>`: `<option value="${e}"${ e == value? "selected" : ""}>${e}</option>` )
     return `<div class="mb-2 ${className}">
@@ -352,14 +352,14 @@ export default class CalendarHeatmap {
       <select class="form-select form-select-sm" name="${name}" id="${id}">${options.join('\n')}</select>
     </div>`;
   }
-  elementInputRadio(name = 'check', {value = '', label = 'label', className = '', disabled = false} = {}) {
+  #elementInputRadio(name = 'check', {value = '', label = 'label', className = '', disabled = false} = {}) {
     let id = "ch-" + crypto.randomUUID();
     return `<div class="form-check mb-1">
       <input class="form-check-input" name="${name}" type="radio" autocomplete="off" value="${true}" id="${id}" ${value ? 'checked' : ''}>
       <label class="form-check-label" for="${id}">${label}</label>
     </div>`;
   }
-  elementInputScales(name = 'scales', {value = '', label = 'label', options = [], className = '', disabled = false} = {}) {
+  #elementInputScales(name = 'scales', {value = '', label = 'label', options = [], className = '', disabled = false} = {}) {
     options = options.map( e => {
       let id = "ch-" + crypto.randomUUID();
       return `<div>
@@ -374,7 +374,7 @@ export default class CalendarHeatmap {
         </div>
       </div>`;
   }
-  elementHelp(options) {
+  #elementHelp(options) {
     let id = "ch-" + crypto.randomUUID();
     if (options.display == 'inline')
       return `<span>${options.content}</span>`
