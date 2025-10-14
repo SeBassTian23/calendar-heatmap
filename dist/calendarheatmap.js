@@ -7435,6 +7435,7 @@ var calendar = function calendar(draw) {
   var initial_x = x;
   var offset_x = x;
   var offset_y = y;
+  var offset_x_max = x;
   var end_y = offset_y;
   var max_x = 0;
   var tileBorder = chroma_js__WEBPACK_IMPORTED_MODULE_0___default()(tileColor).darken(2).hex();
@@ -7456,12 +7457,12 @@ var calendar = function calendar(draw) {
     return dayjs__WEBPACK_IMPORTED_MODULE_1___default()(e.date || e[dataInput.dateColumn]);
   }))) || null;
   var minData = Math.min.apply(Math, _toConsumableArray(data.filter(function (e) {
-    return (e.value || e[dataInput.valueColumn]) !== null;
+    return (e.value || e[dataInput.valueColumn]) !== null && !isNaN(e.value || e[dataInput.valueColumn]);
   }).map(function (e) {
     return e.value || e[dataInput.valueColumn];
   })));
   var maxData = Math.max.apply(Math, _toConsumableArray(data.filter(function (e) {
-    return (e.value || e[dataInput.valueColumn]) !== null;
+    return (e.value || e[dataInput.valueColumn]) !== null && !isNaN(e.value || e[dataInput.valueColumn]);
   }).map(function (e) {
     return e.value || e[dataInput.valueColumn];
   })));
@@ -7505,11 +7506,17 @@ var calendar = function calendar(draw) {
     if (calendarWeekLabels.format == 'ddd') weekdays = dayjs__WEBPACK_IMPORTED_MODULE_1___default().weekdaysShort();
     if (calendarWeekLabels.format == 'dddd') weekdays = dayjs__WEBPACK_IMPORTED_MODULE_1___default().weekdays();
 
-    // Hack to guess the spacing, since we can't use text.length()
-    var fontFactor = calendarWeekLabels.format == 'dddd' ? 1.6 : 1.1;
-    weeklabelWidth = Math.max.apply(Math, _toConsumableArray(weekdays.map(function (e) {
-      return e.length;
-    }))) * (calendarWeekLabels.fontSize / fontFactor);
+    // Calculate weeklabelWidth as offset
+    [0, 2, 4, 6].forEach(function (wd) {
+      var text = draw.text(weekdays[(wd + weekStart) % weekdays.length]);
+      text.font({
+        family: calendarWeekLabels.fontFamily,
+        size: calendarWeekLabels.fontSize,
+        weight: calendarWeekLabels.fontWeight
+      });
+      if (weeklabelWidth < text.bbox().w) weeklabelWidth = text.bbox().w + 5 + tilePadding;
+      text.remove();
+    });
     offset_x += weeklabelWidth;
   }
   var groupROW = null;
@@ -7556,6 +7563,7 @@ var calendar = function calendar(draw) {
                 anchor: calendarWeekLabels.textAlignment,
                 fill: calendarWeekLabels.fontColor
               });
+              text.addClass('calendar-week');
               text.move(offset_x - (weeklabelWidth - tilePadding), y - 2);
               group.add(text);
             }
@@ -7613,6 +7621,10 @@ var calendar = function calendar(draw) {
           if (startDate.isToday() && tileFuture) {
             tileColor = chroma_js__WEBPACK_IMPORTED_MODULE_0___default()(tileColor).brighten(0.5);
           }
+
+          // Add classes for Darkmode
+          if (currentTileColor == scale.nodata) tile.addClass('no-data');
+          if (startDate.isAfter(dayjs__WEBPACK_IMPORTED_MODULE_1___default()())) tile.addClass('future');
           if (end_y < y) end_y = y;
           if (month_days == day_count && w == 6) {
             x += tileSize + tilePadding;
@@ -7642,6 +7654,7 @@ var calendar = function calendar(draw) {
         anchor: calendarMonthLabels.textAlignment,
         fill: calendarMonthLabels.fontColor
       });
+      text.addClass('calendar-month');
       if (calendarMonthLabels.textAlignment == 'middle') {
         text.amove(offset_x + (tileSize + x - offset_x) / 2, end_y + tilePadding + tileSize + text.bbox().h);
       } else if (calendarMonthLabels.textAlignment == 'end') {
@@ -7659,6 +7672,7 @@ var calendar = function calendar(draw) {
     // calculate offset for next month
     offset_x = x;
     if (monthGap) offset_x += monthPadding + tileSize;
+    if (offset_x_max < offset_x) offset_x_max = offset_x;
   }
 
   // Reverse the order of rows
@@ -7691,7 +7705,7 @@ var calendar = function calendar(draw) {
 
   // Legend
   if (legend) {
-    offset_y = drawLegend(draw, offset_x, offset_y, colors, minData, maxData, tileShape, tileBorder, tileSize, tilePadding, monthGap, monthPadding, legend, transform, tooltip, i18n);
+    offset_y = drawLegend(draw, offset_x_max, offset_y, colors, minData, maxData, tileShape, tileBorder, tileSize, tilePadding, monthGap, monthPadding, legend, transform, tooltip, i18n);
   }
 
   // Set size and viewbox
@@ -7810,7 +7824,7 @@ function createBins(min, max, numBins) {
   var step = (max - min) / numBins;
   var bins = [];
   for (var i = 0; i < numBins; i++) {
-    bins.push([i * step + min, (i + 1) * step + min]);
+    bins.push([i * step + min, i == numBins - 1 ? max : (i + 1) * step + min]);
   }
   return bins;
 }
@@ -7875,9 +7889,23 @@ var drawLegend = function drawLegend(draw, x, y, colors, min, max, tileShape, ti
     if (legendMin != 'Min') legendMin += legend.suffix;
     if (legendMax != 'Max') legendMax += legend.suffix;
   }
+
+  // Legend padding
+  var y_pad = 0;
+  if (legend.position != 'center') {
+    var text_tmp = draw.plain(legend.position == 'right' ? legendMax : legendMin);
+    text_tmp.font({
+      family: legend.fontFamily,
+      size: legend.fontSize,
+      weight: legend.fontWeight
+    });
+    y_pad = text_tmp.bbox().w / 2;
+    text_tmp.remove();
+    if (legend.position == 'right') y_pad = (y_pad + 10) * -1;
+  }
   for (var s = 0; s < colors.length; s++) {
     // Add tile
-    var tile = drawTile(draw, x_init + (tilePadding + tileSize) * s, y, tileShape, tileSize, colors[s], tileBorder);
+    var tile = drawTile(draw, x_init + y_pad + (tilePadding + tileSize) * s, y, tileShape, tileSize, colors[s], tileBorder);
 
     // Add labels
     if ((s == 0 || s == colors.length - 1) && legend.labels) {
@@ -7889,6 +7917,7 @@ var drawLegend = function drawLegend(draw, x, y, colors, min, max, tileShape, ti
         anchor: 'middle',
         fill: legend.fontColor
       });
+      text.addClass('legend');
       labelOffset = text.bbox().h;
       text.amove(tile.x() + tileSize / 2, y + tileSize + labelOffset);
       group.add(text);
@@ -7901,6 +7930,44 @@ var drawLegend = function drawLegend(draw, x, y, colors, min, max, tileShape, ti
     group.add(tile);
   }
   return y += tileSize + labelOffset;
+};
+
+/***/ }),
+
+/***/ "./src/components/darkmode.js":
+/*!************************************!*\
+  !*** ./src/components/darkmode.js ***!
+  \************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__),
+/* harmony export */   settings: () => (/* binding */ settings)
+/* harmony export */ });
+function _objectDestructuringEmpty(obj) { if (obj == null) throw new TypeError("Cannot destructure " + obj); }
+/**
+ * Darkmode
+ * Automatically change text fill for darkmode
+ */
+
+var darkmode = function darkmode(draw) {
+  _objectDestructuringEmpty(arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {});
+  draw.style("rect:hover", {
+    strokeWidth: 2
+  });
+  return;
+};
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (darkmode);
+var settings = function settings() {
+  return {
+    "id": "darkmode",
+    "headerTitle": "Automatic Darkmode",
+    "show": true,
+    "disabled": false,
+    "options": []
+  };
 };
 
 /***/ }),
@@ -8419,6 +8486,7 @@ var subtitle = function subtitle(draw) {
     opacity: .75
   });
   text.move(x, y);
+  text.addClass('sub-title');
   return text;
 };
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (subtitle);
@@ -8496,6 +8564,7 @@ var title = function title(draw) {
     fill: fontColor
   });
   text.move(x, y);
+  text.addClass('title');
   return text;
 };
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (title);
@@ -8859,11 +8928,12 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _components_hover__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ../components/hover */ "./src/components/hover.js");
 /* harmony import */ var _components_transform__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ../components/transform */ "./src/components/transform.js");
 /* harmony import */ var _components_tooltip__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ../components/tooltip */ "./src/components/tooltip.js");
-/* harmony import */ var _components_calendar__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ../components/calendar */ "./src/components/calendar.js");
-/* harmony import */ var _components_calendar_month__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ../components/calendar-month */ "./src/components/calendar-month.js");
-/* harmony import */ var _components_calendar_week__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! ../components/calendar-week */ "./src/components/calendar-week.js");
-/* harmony import */ var _components_data__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! ../components/data */ "./src/components/data.js");
-/* harmony import */ var _components_i18n__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! ../components/i18n */ "./src/components/i18n.js");
+/* harmony import */ var _components_darkmode__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ../components/darkmode */ "./src/components/darkmode.js");
+/* harmony import */ var _components_calendar__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ../components/calendar */ "./src/components/calendar.js");
+/* harmony import */ var _components_calendar_month__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! ../components/calendar-month */ "./src/components/calendar-month.js");
+/* harmony import */ var _components_calendar_week__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! ../components/calendar-week */ "./src/components/calendar-week.js");
+/* harmony import */ var _components_data__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! ../components/data */ "./src/components/data.js");
+/* harmony import */ var _components_i18n__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(/*! ../components/i18n */ "./src/components/i18n.js");
 
 
 
@@ -8877,14 +8947,41 @@ __webpack_require__.r(__webpack_exports__);
 
 
 
-var settings = [_components_title__WEBPACK_IMPORTED_MODULE_0__.settings(), _components_subtitle__WEBPACK_IMPORTED_MODULE_1__.settings(), _components_scale__WEBPACK_IMPORTED_MODULE_2__.settings(), _components_legend__WEBPACK_IMPORTED_MODULE_3__.settings(), _components_labels__WEBPACK_IMPORTED_MODULE_4__.settings(), _components_hover__WEBPACK_IMPORTED_MODULE_5__.settings(), _components_transform__WEBPACK_IMPORTED_MODULE_6__.settings(), _components_tooltip__WEBPACK_IMPORTED_MODULE_7__.settings(), _components_calendar__WEBPACK_IMPORTED_MODULE_8__.settings(), _components_calendar_month__WEBPACK_IMPORTED_MODULE_9__.settings(), _components_calendar_week__WEBPACK_IMPORTED_MODULE_10__.settings(), _components_data__WEBPACK_IMPORTED_MODULE_11__.settings(), _components_i18n__WEBPACK_IMPORTED_MODULE_12__.settings()];
+
+var settings = [_components_title__WEBPACK_IMPORTED_MODULE_0__.settings(), _components_subtitle__WEBPACK_IMPORTED_MODULE_1__.settings(), _components_scale__WEBPACK_IMPORTED_MODULE_2__.settings(), _components_legend__WEBPACK_IMPORTED_MODULE_3__.settings(), _components_labels__WEBPACK_IMPORTED_MODULE_4__.settings(), _components_hover__WEBPACK_IMPORTED_MODULE_5__.settings(), _components_transform__WEBPACK_IMPORTED_MODULE_6__.settings(), _components_tooltip__WEBPACK_IMPORTED_MODULE_7__.settings(), _components_darkmode__WEBPACK_IMPORTED_MODULE_8__.settings(), _components_calendar__WEBPACK_IMPORTED_MODULE_9__.settings(), _components_calendar_month__WEBPACK_IMPORTED_MODULE_10__.settings(), _components_calendar_week__WEBPACK_IMPORTED_MODULE_11__.settings(), _components_data__WEBPACK_IMPORTED_MODULE_12__.settings(), _components_i18n__WEBPACK_IMPORTED_MODULE_13__.settings()];
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (settings);
 var layers = ["title", "subtitle", "scale", "legend", "i18n", "hover", "tooltip", "data-input", "data", "transform", "calendar-month", "calendar-week", "calendar"];
 var menu = {
   "Layout": ["calendar", "title", "subtitle", "calendar-month", "calendar-week", "legend", "i18n"],
   "Data": ["data-input", "scale", "transform"],
-  "Interactivity": ["hover", "tooltip"]
+  "Interactivity": ["hover", "tooltip", "darkmode"]
 };
+
+/***/ }),
+
+/***/ "./src/helpers/generateDarkColor.js":
+/*!******************************************!*\
+  !*** ./src/helpers/generateDarkColor.js ***!
+  \******************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var chroma_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! chroma-js */ "./node_modules/chroma-js/chroma.js");
+/* harmony import */ var chroma_js__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(chroma_js__WEBPACK_IMPORTED_MODULE_0__);
+
+var generateDarkColor = function generateDarkColor() {
+  var lightColor = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : '#000000';
+  var c = chroma_js__WEBPACK_IMPORTED_MODULE_0___default()(lightColor);
+  var lum = c.luminance();
+  if (lum < 0.3) return c.brighten(2).hex();
+  if (lum < 0.5) return c.brighten(1).hex();
+  return c.saturate(0.5).hex();
+};
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (generateDarkColor);
 
 /***/ }),
 
@@ -9142,6 +9239,43 @@ module.exports = Set;
 
 /***/ }),
 
+/***/ "./node_modules/lodash/_SetCache.js":
+/*!******************************************!*\
+  !*** ./node_modules/lodash/_SetCache.js ***!
+  \******************************************/
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+var MapCache = __webpack_require__(/*! ./_MapCache */ "./node_modules/lodash/_MapCache.js"),
+    setCacheAdd = __webpack_require__(/*! ./_setCacheAdd */ "./node_modules/lodash/_setCacheAdd.js"),
+    setCacheHas = __webpack_require__(/*! ./_setCacheHas */ "./node_modules/lodash/_setCacheHas.js");
+
+/**
+ *
+ * Creates an array cache object to store unique values.
+ *
+ * @private
+ * @constructor
+ * @param {Array} [values] The values to cache.
+ */
+function SetCache(values) {
+  var index = -1,
+      length = values == null ? 0 : values.length;
+
+  this.__data__ = new MapCache;
+  while (++index < length) {
+    this.add(values[index]);
+  }
+}
+
+// Add methods to `SetCache`.
+SetCache.prototype.add = SetCache.prototype.push = setCacheAdd;
+SetCache.prototype.has = setCacheHas;
+
+module.exports = SetCache;
+
+
+/***/ }),
+
 /***/ "./node_modules/lodash/_Stack.js":
 /*!***************************************!*\
   !*** ./node_modules/lodash/_Stack.js ***!
@@ -9224,6 +9358,37 @@ var getNative = __webpack_require__(/*! ./_getNative */ "./node_modules/lodash/_
 var WeakMap = getNative(root, 'WeakMap');
 
 module.exports = WeakMap;
+
+
+/***/ }),
+
+/***/ "./node_modules/lodash/_apply.js":
+/*!***************************************!*\
+  !*** ./node_modules/lodash/_apply.js ***!
+  \***************************************/
+/***/ ((module) => {
+
+/**
+ * A faster alternative to `Function#apply`, this function invokes `func`
+ * with the `this` binding of `thisArg` and the arguments of `args`.
+ *
+ * @private
+ * @param {Function} func The function to invoke.
+ * @param {*} thisArg The `this` binding of `func`.
+ * @param {Array} args The arguments to invoke `func` with.
+ * @returns {*} Returns the result of `func`.
+ */
+function apply(func, thisArg, args) {
+  switch (args.length) {
+    case 0: return func.call(thisArg);
+    case 1: return func.call(thisArg, args[0]);
+    case 2: return func.call(thisArg, args[0], args[1]);
+    case 3: return func.call(thisArg, args[0], args[1], args[2]);
+  }
+  return func.apply(thisArg, args);
+}
+
+module.exports = apply;
 
 
 /***/ }),
@@ -9354,37 +9519,6 @@ module.exports = arrayLikeKeys;
 
 /***/ }),
 
-/***/ "./node_modules/lodash/_arrayMap.js":
-/*!******************************************!*\
-  !*** ./node_modules/lodash/_arrayMap.js ***!
-  \******************************************/
-/***/ ((module) => {
-
-/**
- * A specialized version of `_.map` for arrays without support for iteratee
- * shorthands.
- *
- * @private
- * @param {Array} [array] The array to iterate over.
- * @param {Function} iteratee The function invoked per iteration.
- * @returns {Array} Returns the new mapped array.
- */
-function arrayMap(array, iteratee) {
-  var index = -1,
-      length = array == null ? 0 : array.length,
-      result = Array(length);
-
-  while (++index < length) {
-    result[index] = iteratee(array[index], index, array);
-  }
-  return result;
-}
-
-module.exports = arrayMap;
-
-
-/***/ }),
-
 /***/ "./node_modules/lodash/_arrayPush.js":
 /*!*******************************************!*\
   !*** ./node_modules/lodash/_arrayPush.js ***!
@@ -9411,6 +9545,69 @@ function arrayPush(array, values) {
 }
 
 module.exports = arrayPush;
+
+
+/***/ }),
+
+/***/ "./node_modules/lodash/_arraySome.js":
+/*!*******************************************!*\
+  !*** ./node_modules/lodash/_arraySome.js ***!
+  \*******************************************/
+/***/ ((module) => {
+
+/**
+ * A specialized version of `_.some` for arrays without support for iteratee
+ * shorthands.
+ *
+ * @private
+ * @param {Array} [array] The array to iterate over.
+ * @param {Function} predicate The function invoked per iteration.
+ * @returns {boolean} Returns `true` if any element passes the predicate check,
+ *  else `false`.
+ */
+function arraySome(array, predicate) {
+  var index = -1,
+      length = array == null ? 0 : array.length;
+
+  while (++index < length) {
+    if (predicate(array[index], index, array)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+module.exports = arraySome;
+
+
+/***/ }),
+
+/***/ "./node_modules/lodash/_assignMergeValue.js":
+/*!**************************************************!*\
+  !*** ./node_modules/lodash/_assignMergeValue.js ***!
+  \**************************************************/
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+var baseAssignValue = __webpack_require__(/*! ./_baseAssignValue */ "./node_modules/lodash/_baseAssignValue.js"),
+    eq = __webpack_require__(/*! ./eq */ "./node_modules/lodash/eq.js");
+
+/**
+ * This function is like `assignValue` except that it doesn't assign
+ * `undefined` values.
+ *
+ * @private
+ * @param {Object} object The object to modify.
+ * @param {string} key The key of the property to assign.
+ * @param {*} value The value to assign.
+ */
+function assignMergeValue(object, key, value) {
+  if ((value !== undefined && !eq(object[key], value)) ||
+      (value === undefined && !(key in object))) {
+    baseAssignValue(object, key, value);
+  }
+}
+
+module.exports = assignMergeValue;
 
 
 /***/ }),
@@ -9789,36 +9986,28 @@ module.exports = baseCreate;
 
 /***/ }),
 
-/***/ "./node_modules/lodash/_baseGet.js":
+/***/ "./node_modules/lodash/_baseFor.js":
 /*!*****************************************!*\
-  !*** ./node_modules/lodash/_baseGet.js ***!
+  !*** ./node_modules/lodash/_baseFor.js ***!
   \*****************************************/
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
-var castPath = __webpack_require__(/*! ./_castPath */ "./node_modules/lodash/_castPath.js"),
-    toKey = __webpack_require__(/*! ./_toKey */ "./node_modules/lodash/_toKey.js");
+var createBaseFor = __webpack_require__(/*! ./_createBaseFor */ "./node_modules/lodash/_createBaseFor.js");
 
 /**
- * The base implementation of `_.get` without support for default values.
+ * The base implementation of `baseForOwn` which iterates over `object`
+ * properties returned by `keysFunc` and invokes `iteratee` for each property.
+ * Iteratee functions may exit iteration early by explicitly returning `false`.
  *
  * @private
- * @param {Object} object The object to query.
- * @param {Array|string} path The path of the property to get.
- * @returns {*} Returns the resolved value.
+ * @param {Object} object The object to iterate over.
+ * @param {Function} iteratee The function invoked per iteration.
+ * @param {Function} keysFunc The function to get the keys of `object`.
+ * @returns {Object} Returns `object`.
  */
-function baseGet(object, path) {
-  path = castPath(path, object);
+var baseFor = createBaseFor();
 
-  var index = 0,
-      length = path.length;
-
-  while (object != null && index < length) {
-    object = object[toKey(path[index++])];
-  }
-  return (index && index == length) ? object : undefined;
-}
-
-module.exports = baseGet;
+module.exports = baseFor;
 
 
 /***/ }),
@@ -9915,6 +10104,137 @@ function baseIsArguments(value) {
 }
 
 module.exports = baseIsArguments;
+
+
+/***/ }),
+
+/***/ "./node_modules/lodash/_baseIsEqual.js":
+/*!*********************************************!*\
+  !*** ./node_modules/lodash/_baseIsEqual.js ***!
+  \*********************************************/
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+var baseIsEqualDeep = __webpack_require__(/*! ./_baseIsEqualDeep */ "./node_modules/lodash/_baseIsEqualDeep.js"),
+    isObjectLike = __webpack_require__(/*! ./isObjectLike */ "./node_modules/lodash/isObjectLike.js");
+
+/**
+ * The base implementation of `_.isEqual` which supports partial comparisons
+ * and tracks traversed objects.
+ *
+ * @private
+ * @param {*} value The value to compare.
+ * @param {*} other The other value to compare.
+ * @param {boolean} bitmask The bitmask flags.
+ *  1 - Unordered comparison
+ *  2 - Partial comparison
+ * @param {Function} [customizer] The function to customize comparisons.
+ * @param {Object} [stack] Tracks traversed `value` and `other` objects.
+ * @returns {boolean} Returns `true` if the values are equivalent, else `false`.
+ */
+function baseIsEqual(value, other, bitmask, customizer, stack) {
+  if (value === other) {
+    return true;
+  }
+  if (value == null || other == null || (!isObjectLike(value) && !isObjectLike(other))) {
+    return value !== value && other !== other;
+  }
+  return baseIsEqualDeep(value, other, bitmask, customizer, baseIsEqual, stack);
+}
+
+module.exports = baseIsEqual;
+
+
+/***/ }),
+
+/***/ "./node_modules/lodash/_baseIsEqualDeep.js":
+/*!*************************************************!*\
+  !*** ./node_modules/lodash/_baseIsEqualDeep.js ***!
+  \*************************************************/
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+var Stack = __webpack_require__(/*! ./_Stack */ "./node_modules/lodash/_Stack.js"),
+    equalArrays = __webpack_require__(/*! ./_equalArrays */ "./node_modules/lodash/_equalArrays.js"),
+    equalByTag = __webpack_require__(/*! ./_equalByTag */ "./node_modules/lodash/_equalByTag.js"),
+    equalObjects = __webpack_require__(/*! ./_equalObjects */ "./node_modules/lodash/_equalObjects.js"),
+    getTag = __webpack_require__(/*! ./_getTag */ "./node_modules/lodash/_getTag.js"),
+    isArray = __webpack_require__(/*! ./isArray */ "./node_modules/lodash/isArray.js"),
+    isBuffer = __webpack_require__(/*! ./isBuffer */ "./node_modules/lodash/isBuffer.js"),
+    isTypedArray = __webpack_require__(/*! ./isTypedArray */ "./node_modules/lodash/isTypedArray.js");
+
+/** Used to compose bitmasks for value comparisons. */
+var COMPARE_PARTIAL_FLAG = 1;
+
+/** `Object#toString` result references. */
+var argsTag = '[object Arguments]',
+    arrayTag = '[object Array]',
+    objectTag = '[object Object]';
+
+/** Used for built-in method references. */
+var objectProto = Object.prototype;
+
+/** Used to check objects for own properties. */
+var hasOwnProperty = objectProto.hasOwnProperty;
+
+/**
+ * A specialized version of `baseIsEqual` for arrays and objects which performs
+ * deep comparisons and tracks traversed objects enabling objects with circular
+ * references to be compared.
+ *
+ * @private
+ * @param {Object} object The object to compare.
+ * @param {Object} other The other object to compare.
+ * @param {number} bitmask The bitmask flags. See `baseIsEqual` for more details.
+ * @param {Function} customizer The function to customize comparisons.
+ * @param {Function} equalFunc The function to determine equivalents of values.
+ * @param {Object} [stack] Tracks traversed `object` and `other` objects.
+ * @returns {boolean} Returns `true` if the objects are equivalent, else `false`.
+ */
+function baseIsEqualDeep(object, other, bitmask, customizer, equalFunc, stack) {
+  var objIsArr = isArray(object),
+      othIsArr = isArray(other),
+      objTag = objIsArr ? arrayTag : getTag(object),
+      othTag = othIsArr ? arrayTag : getTag(other);
+
+  objTag = objTag == argsTag ? objectTag : objTag;
+  othTag = othTag == argsTag ? objectTag : othTag;
+
+  var objIsObj = objTag == objectTag,
+      othIsObj = othTag == objectTag,
+      isSameTag = objTag == othTag;
+
+  if (isSameTag && isBuffer(object)) {
+    if (!isBuffer(other)) {
+      return false;
+    }
+    objIsArr = true;
+    objIsObj = false;
+  }
+  if (isSameTag && !objIsObj) {
+    stack || (stack = new Stack);
+    return (objIsArr || isTypedArray(object))
+      ? equalArrays(object, other, bitmask, customizer, equalFunc, stack)
+      : equalByTag(object, other, objTag, bitmask, customizer, equalFunc, stack);
+  }
+  if (!(bitmask & COMPARE_PARTIAL_FLAG)) {
+    var objIsWrapped = objIsObj && hasOwnProperty.call(object, '__wrapped__'),
+        othIsWrapped = othIsObj && hasOwnProperty.call(other, '__wrapped__');
+
+    if (objIsWrapped || othIsWrapped) {
+      var objUnwrapped = objIsWrapped ? object.value() : object,
+          othUnwrapped = othIsWrapped ? other.value() : other;
+
+      stack || (stack = new Stack);
+      return equalFunc(objUnwrapped, othUnwrapped, bitmask, customizer, stack);
+    }
+  }
+  if (!isSameTag) {
+    return false;
+  }
+  stack || (stack = new Stack);
+  return equalObjects(object, other, bitmask, customizer, equalFunc, stack);
+}
+
+module.exports = baseIsEqualDeep;
 
 
 /***/ }),
@@ -10185,63 +10505,217 @@ module.exports = baseKeysIn;
 
 /***/ }),
 
-/***/ "./node_modules/lodash/_baseSet.js":
-/*!*****************************************!*\
-  !*** ./node_modules/lodash/_baseSet.js ***!
-  \*****************************************/
+/***/ "./node_modules/lodash/_baseMerge.js":
+/*!*******************************************!*\
+  !*** ./node_modules/lodash/_baseMerge.js ***!
+  \*******************************************/
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
-var assignValue = __webpack_require__(/*! ./_assignValue */ "./node_modules/lodash/_assignValue.js"),
-    castPath = __webpack_require__(/*! ./_castPath */ "./node_modules/lodash/_castPath.js"),
-    isIndex = __webpack_require__(/*! ./_isIndex */ "./node_modules/lodash/_isIndex.js"),
+var Stack = __webpack_require__(/*! ./_Stack */ "./node_modules/lodash/_Stack.js"),
+    assignMergeValue = __webpack_require__(/*! ./_assignMergeValue */ "./node_modules/lodash/_assignMergeValue.js"),
+    baseFor = __webpack_require__(/*! ./_baseFor */ "./node_modules/lodash/_baseFor.js"),
+    baseMergeDeep = __webpack_require__(/*! ./_baseMergeDeep */ "./node_modules/lodash/_baseMergeDeep.js"),
     isObject = __webpack_require__(/*! ./isObject */ "./node_modules/lodash/isObject.js"),
-    toKey = __webpack_require__(/*! ./_toKey */ "./node_modules/lodash/_toKey.js");
+    keysIn = __webpack_require__(/*! ./keysIn */ "./node_modules/lodash/keysIn.js"),
+    safeGet = __webpack_require__(/*! ./_safeGet */ "./node_modules/lodash/_safeGet.js");
 
 /**
- * The base implementation of `_.set`.
+ * The base implementation of `_.merge` without support for multiple sources.
  *
  * @private
- * @param {Object} object The object to modify.
- * @param {Array|string} path The path of the property to set.
- * @param {*} value The value to set.
- * @param {Function} [customizer] The function to customize path creation.
- * @returns {Object} Returns `object`.
+ * @param {Object} object The destination object.
+ * @param {Object} source The source object.
+ * @param {number} srcIndex The index of `source`.
+ * @param {Function} [customizer] The function to customize merged values.
+ * @param {Object} [stack] Tracks traversed source values and their merged
+ *  counterparts.
  */
-function baseSet(object, path, value, customizer) {
-  if (!isObject(object)) {
-    return object;
+function baseMerge(object, source, srcIndex, customizer, stack) {
+  if (object === source) {
+    return;
   }
-  path = castPath(path, object);
-
-  var index = -1,
-      length = path.length,
-      lastIndex = length - 1,
-      nested = object;
-
-  while (nested != null && ++index < length) {
-    var key = toKey(path[index]),
-        newValue = value;
-
-    if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
-      return object;
+  baseFor(source, function(srcValue, key) {
+    stack || (stack = new Stack);
+    if (isObject(srcValue)) {
+      baseMergeDeep(object, source, key, srcIndex, baseMerge, customizer, stack);
     }
+    else {
+      var newValue = customizer
+        ? customizer(safeGet(object, key), srcValue, (key + ''), object, source, stack)
+        : undefined;
 
-    if (index != lastIndex) {
-      var objValue = nested[key];
-      newValue = customizer ? customizer(objValue, key, nested) : undefined;
       if (newValue === undefined) {
-        newValue = isObject(objValue)
-          ? objValue
-          : (isIndex(path[index + 1]) ? [] : {});
+        newValue = srcValue;
       }
+      assignMergeValue(object, key, newValue);
     }
-    assignValue(nested, key, newValue);
-    nested = nested[key];
-  }
-  return object;
+  }, keysIn);
 }
 
-module.exports = baseSet;
+module.exports = baseMerge;
+
+
+/***/ }),
+
+/***/ "./node_modules/lodash/_baseMergeDeep.js":
+/*!***********************************************!*\
+  !*** ./node_modules/lodash/_baseMergeDeep.js ***!
+  \***********************************************/
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+var assignMergeValue = __webpack_require__(/*! ./_assignMergeValue */ "./node_modules/lodash/_assignMergeValue.js"),
+    cloneBuffer = __webpack_require__(/*! ./_cloneBuffer */ "./node_modules/lodash/_cloneBuffer.js"),
+    cloneTypedArray = __webpack_require__(/*! ./_cloneTypedArray */ "./node_modules/lodash/_cloneTypedArray.js"),
+    copyArray = __webpack_require__(/*! ./_copyArray */ "./node_modules/lodash/_copyArray.js"),
+    initCloneObject = __webpack_require__(/*! ./_initCloneObject */ "./node_modules/lodash/_initCloneObject.js"),
+    isArguments = __webpack_require__(/*! ./isArguments */ "./node_modules/lodash/isArguments.js"),
+    isArray = __webpack_require__(/*! ./isArray */ "./node_modules/lodash/isArray.js"),
+    isArrayLikeObject = __webpack_require__(/*! ./isArrayLikeObject */ "./node_modules/lodash/isArrayLikeObject.js"),
+    isBuffer = __webpack_require__(/*! ./isBuffer */ "./node_modules/lodash/isBuffer.js"),
+    isFunction = __webpack_require__(/*! ./isFunction */ "./node_modules/lodash/isFunction.js"),
+    isObject = __webpack_require__(/*! ./isObject */ "./node_modules/lodash/isObject.js"),
+    isPlainObject = __webpack_require__(/*! ./isPlainObject */ "./node_modules/lodash/isPlainObject.js"),
+    isTypedArray = __webpack_require__(/*! ./isTypedArray */ "./node_modules/lodash/isTypedArray.js"),
+    safeGet = __webpack_require__(/*! ./_safeGet */ "./node_modules/lodash/_safeGet.js"),
+    toPlainObject = __webpack_require__(/*! ./toPlainObject */ "./node_modules/lodash/toPlainObject.js");
+
+/**
+ * A specialized version of `baseMerge` for arrays and objects which performs
+ * deep merges and tracks traversed objects enabling objects with circular
+ * references to be merged.
+ *
+ * @private
+ * @param {Object} object The destination object.
+ * @param {Object} source The source object.
+ * @param {string} key The key of the value to merge.
+ * @param {number} srcIndex The index of `source`.
+ * @param {Function} mergeFunc The function to merge values.
+ * @param {Function} [customizer] The function to customize assigned values.
+ * @param {Object} [stack] Tracks traversed source values and their merged
+ *  counterparts.
+ */
+function baseMergeDeep(object, source, key, srcIndex, mergeFunc, customizer, stack) {
+  var objValue = safeGet(object, key),
+      srcValue = safeGet(source, key),
+      stacked = stack.get(srcValue);
+
+  if (stacked) {
+    assignMergeValue(object, key, stacked);
+    return;
+  }
+  var newValue = customizer
+    ? customizer(objValue, srcValue, (key + ''), object, source, stack)
+    : undefined;
+
+  var isCommon = newValue === undefined;
+
+  if (isCommon) {
+    var isArr = isArray(srcValue),
+        isBuff = !isArr && isBuffer(srcValue),
+        isTyped = !isArr && !isBuff && isTypedArray(srcValue);
+
+    newValue = srcValue;
+    if (isArr || isBuff || isTyped) {
+      if (isArray(objValue)) {
+        newValue = objValue;
+      }
+      else if (isArrayLikeObject(objValue)) {
+        newValue = copyArray(objValue);
+      }
+      else if (isBuff) {
+        isCommon = false;
+        newValue = cloneBuffer(srcValue, true);
+      }
+      else if (isTyped) {
+        isCommon = false;
+        newValue = cloneTypedArray(srcValue, true);
+      }
+      else {
+        newValue = [];
+      }
+    }
+    else if (isPlainObject(srcValue) || isArguments(srcValue)) {
+      newValue = objValue;
+      if (isArguments(objValue)) {
+        newValue = toPlainObject(objValue);
+      }
+      else if (!isObject(objValue) || isFunction(objValue)) {
+        newValue = initCloneObject(srcValue);
+      }
+    }
+    else {
+      isCommon = false;
+    }
+  }
+  if (isCommon) {
+    // Recursively merge objects and arrays (susceptible to call stack limits).
+    stack.set(srcValue, newValue);
+    mergeFunc(newValue, srcValue, srcIndex, customizer, stack);
+    stack['delete'](srcValue);
+  }
+  assignMergeValue(object, key, newValue);
+}
+
+module.exports = baseMergeDeep;
+
+
+/***/ }),
+
+/***/ "./node_modules/lodash/_baseRest.js":
+/*!******************************************!*\
+  !*** ./node_modules/lodash/_baseRest.js ***!
+  \******************************************/
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+var identity = __webpack_require__(/*! ./identity */ "./node_modules/lodash/identity.js"),
+    overRest = __webpack_require__(/*! ./_overRest */ "./node_modules/lodash/_overRest.js"),
+    setToString = __webpack_require__(/*! ./_setToString */ "./node_modules/lodash/_setToString.js");
+
+/**
+ * The base implementation of `_.rest` which doesn't validate or coerce arguments.
+ *
+ * @private
+ * @param {Function} func The function to apply a rest parameter to.
+ * @param {number} [start=func.length-1] The start position of the rest parameter.
+ * @returns {Function} Returns the new function.
+ */
+function baseRest(func, start) {
+  return setToString(overRest(func, start, identity), func + '');
+}
+
+module.exports = baseRest;
+
+
+/***/ }),
+
+/***/ "./node_modules/lodash/_baseSetToString.js":
+/*!*************************************************!*\
+  !*** ./node_modules/lodash/_baseSetToString.js ***!
+  \*************************************************/
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+var constant = __webpack_require__(/*! ./constant */ "./node_modules/lodash/constant.js"),
+    defineProperty = __webpack_require__(/*! ./_defineProperty */ "./node_modules/lodash/_defineProperty.js"),
+    identity = __webpack_require__(/*! ./identity */ "./node_modules/lodash/identity.js");
+
+/**
+ * The base implementation of `setToString` without support for hot loop shorting.
+ *
+ * @private
+ * @param {Function} func The function to modify.
+ * @param {Function} string The `toString` result.
+ * @returns {Function} Returns `func`.
+ */
+var baseSetToString = !defineProperty ? identity : function(func, string) {
+  return defineProperty(func, 'toString', {
+    'configurable': true,
+    'enumerable': false,
+    'value': constant(string),
+    'writable': true
+  });
+};
+
+module.exports = baseSetToString;
 
 
 /***/ }),
@@ -10276,53 +10750,6 @@ module.exports = baseTimes;
 
 /***/ }),
 
-/***/ "./node_modules/lodash/_baseToString.js":
-/*!**********************************************!*\
-  !*** ./node_modules/lodash/_baseToString.js ***!
-  \**********************************************/
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
-
-var Symbol = __webpack_require__(/*! ./_Symbol */ "./node_modules/lodash/_Symbol.js"),
-    arrayMap = __webpack_require__(/*! ./_arrayMap */ "./node_modules/lodash/_arrayMap.js"),
-    isArray = __webpack_require__(/*! ./isArray */ "./node_modules/lodash/isArray.js"),
-    isSymbol = __webpack_require__(/*! ./isSymbol */ "./node_modules/lodash/isSymbol.js");
-
-/** Used as references for various `Number` constants. */
-var INFINITY = 1 / 0;
-
-/** Used to convert symbols to primitives and strings. */
-var symbolProto = Symbol ? Symbol.prototype : undefined,
-    symbolToString = symbolProto ? symbolProto.toString : undefined;
-
-/**
- * The base implementation of `_.toString` which doesn't convert nullish
- * values to empty strings.
- *
- * @private
- * @param {*} value The value to process.
- * @returns {string} Returns the string.
- */
-function baseToString(value) {
-  // Exit early for strings to avoid a performance hit in some environments.
-  if (typeof value == 'string') {
-    return value;
-  }
-  if (isArray(value)) {
-    // Recursively convert values (susceptible to call stack limits).
-    return arrayMap(value, baseToString) + '';
-  }
-  if (isSymbol(value)) {
-    return symbolToString ? symbolToString.call(value) : '';
-  }
-  var result = (value + '');
-  return (result == '0' && (1 / value) == -INFINITY) ? '-0' : result;
-}
-
-module.exports = baseToString;
-
-
-/***/ }),
-
 /***/ "./node_modules/lodash/_baseUnary.js":
 /*!*******************************************!*\
   !*** ./node_modules/lodash/_baseUnary.js ***!
@@ -10347,33 +10774,25 @@ module.exports = baseUnary;
 
 /***/ }),
 
-/***/ "./node_modules/lodash/_castPath.js":
+/***/ "./node_modules/lodash/_cacheHas.js":
 /*!******************************************!*\
-  !*** ./node_modules/lodash/_castPath.js ***!
+  !*** ./node_modules/lodash/_cacheHas.js ***!
   \******************************************/
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
-
-var isArray = __webpack_require__(/*! ./isArray */ "./node_modules/lodash/isArray.js"),
-    isKey = __webpack_require__(/*! ./_isKey */ "./node_modules/lodash/_isKey.js"),
-    stringToPath = __webpack_require__(/*! ./_stringToPath */ "./node_modules/lodash/_stringToPath.js"),
-    toString = __webpack_require__(/*! ./toString */ "./node_modules/lodash/toString.js");
+/***/ ((module) => {
 
 /**
- * Casts `value` to a path array if it's not one.
+ * Checks if a `cache` value for `key` exists.
  *
  * @private
- * @param {*} value The value to inspect.
- * @param {Object} [object] The object to query keys on.
- * @returns {Array} Returns the cast property path array.
+ * @param {Object} cache The cache to query.
+ * @param {string} key The key of the entry to check.
+ * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
  */
-function castPath(value, object) {
-  if (isArray(value)) {
-    return value;
-  }
-  return isKey(value, object) ? [value] : stringToPath(toString(value));
+function cacheHas(cache, key) {
+  return cache.has(key);
 }
 
-module.exports = castPath;
+module.exports = cacheHas;
 
 
 /***/ }),
@@ -10705,6 +11124,88 @@ module.exports = coreJsData;
 
 /***/ }),
 
+/***/ "./node_modules/lodash/_createAssigner.js":
+/*!************************************************!*\
+  !*** ./node_modules/lodash/_createAssigner.js ***!
+  \************************************************/
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+var baseRest = __webpack_require__(/*! ./_baseRest */ "./node_modules/lodash/_baseRest.js"),
+    isIterateeCall = __webpack_require__(/*! ./_isIterateeCall */ "./node_modules/lodash/_isIterateeCall.js");
+
+/**
+ * Creates a function like `_.assign`.
+ *
+ * @private
+ * @param {Function} assigner The function to assign values.
+ * @returns {Function} Returns the new assigner function.
+ */
+function createAssigner(assigner) {
+  return baseRest(function(object, sources) {
+    var index = -1,
+        length = sources.length,
+        customizer = length > 1 ? sources[length - 1] : undefined,
+        guard = length > 2 ? sources[2] : undefined;
+
+    customizer = (assigner.length > 3 && typeof customizer == 'function')
+      ? (length--, customizer)
+      : undefined;
+
+    if (guard && isIterateeCall(sources[0], sources[1], guard)) {
+      customizer = length < 3 ? undefined : customizer;
+      length = 1;
+    }
+    object = Object(object);
+    while (++index < length) {
+      var source = sources[index];
+      if (source) {
+        assigner(object, source, index, customizer);
+      }
+    }
+    return object;
+  });
+}
+
+module.exports = createAssigner;
+
+
+/***/ }),
+
+/***/ "./node_modules/lodash/_createBaseFor.js":
+/*!***********************************************!*\
+  !*** ./node_modules/lodash/_createBaseFor.js ***!
+  \***********************************************/
+/***/ ((module) => {
+
+/**
+ * Creates a base function for methods like `_.forIn` and `_.forOwn`.
+ *
+ * @private
+ * @param {boolean} [fromRight] Specify iterating from right to left.
+ * @returns {Function} Returns the new base function.
+ */
+function createBaseFor(fromRight) {
+  return function(object, iteratee, keysFunc) {
+    var index = -1,
+        iterable = Object(object),
+        props = keysFunc(object),
+        length = props.length;
+
+    while (length--) {
+      var key = props[fromRight ? length : ++index];
+      if (iteratee(iterable[key], key, iterable) === false) {
+        break;
+      }
+    }
+    return object;
+  };
+}
+
+module.exports = createBaseFor;
+
+
+/***/ }),
+
 /***/ "./node_modules/lodash/_defineProperty.js":
 /*!************************************************!*\
   !*** ./node_modules/lodash/_defineProperty.js ***!
@@ -10722,6 +11223,322 @@ var defineProperty = (function() {
 }());
 
 module.exports = defineProperty;
+
+
+/***/ }),
+
+/***/ "./node_modules/lodash/_equalArrays.js":
+/*!*********************************************!*\
+  !*** ./node_modules/lodash/_equalArrays.js ***!
+  \*********************************************/
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+var SetCache = __webpack_require__(/*! ./_SetCache */ "./node_modules/lodash/_SetCache.js"),
+    arraySome = __webpack_require__(/*! ./_arraySome */ "./node_modules/lodash/_arraySome.js"),
+    cacheHas = __webpack_require__(/*! ./_cacheHas */ "./node_modules/lodash/_cacheHas.js");
+
+/** Used to compose bitmasks for value comparisons. */
+var COMPARE_PARTIAL_FLAG = 1,
+    COMPARE_UNORDERED_FLAG = 2;
+
+/**
+ * A specialized version of `baseIsEqualDeep` for arrays with support for
+ * partial deep comparisons.
+ *
+ * @private
+ * @param {Array} array The array to compare.
+ * @param {Array} other The other array to compare.
+ * @param {number} bitmask The bitmask flags. See `baseIsEqual` for more details.
+ * @param {Function} customizer The function to customize comparisons.
+ * @param {Function} equalFunc The function to determine equivalents of values.
+ * @param {Object} stack Tracks traversed `array` and `other` objects.
+ * @returns {boolean} Returns `true` if the arrays are equivalent, else `false`.
+ */
+function equalArrays(array, other, bitmask, customizer, equalFunc, stack) {
+  var isPartial = bitmask & COMPARE_PARTIAL_FLAG,
+      arrLength = array.length,
+      othLength = other.length;
+
+  if (arrLength != othLength && !(isPartial && othLength > arrLength)) {
+    return false;
+  }
+  // Check that cyclic values are equal.
+  var arrStacked = stack.get(array);
+  var othStacked = stack.get(other);
+  if (arrStacked && othStacked) {
+    return arrStacked == other && othStacked == array;
+  }
+  var index = -1,
+      result = true,
+      seen = (bitmask & COMPARE_UNORDERED_FLAG) ? new SetCache : undefined;
+
+  stack.set(array, other);
+  stack.set(other, array);
+
+  // Ignore non-index properties.
+  while (++index < arrLength) {
+    var arrValue = array[index],
+        othValue = other[index];
+
+    if (customizer) {
+      var compared = isPartial
+        ? customizer(othValue, arrValue, index, other, array, stack)
+        : customizer(arrValue, othValue, index, array, other, stack);
+    }
+    if (compared !== undefined) {
+      if (compared) {
+        continue;
+      }
+      result = false;
+      break;
+    }
+    // Recursively compare arrays (susceptible to call stack limits).
+    if (seen) {
+      if (!arraySome(other, function(othValue, othIndex) {
+            if (!cacheHas(seen, othIndex) &&
+                (arrValue === othValue || equalFunc(arrValue, othValue, bitmask, customizer, stack))) {
+              return seen.push(othIndex);
+            }
+          })) {
+        result = false;
+        break;
+      }
+    } else if (!(
+          arrValue === othValue ||
+            equalFunc(arrValue, othValue, bitmask, customizer, stack)
+        )) {
+      result = false;
+      break;
+    }
+  }
+  stack['delete'](array);
+  stack['delete'](other);
+  return result;
+}
+
+module.exports = equalArrays;
+
+
+/***/ }),
+
+/***/ "./node_modules/lodash/_equalByTag.js":
+/*!********************************************!*\
+  !*** ./node_modules/lodash/_equalByTag.js ***!
+  \********************************************/
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+var Symbol = __webpack_require__(/*! ./_Symbol */ "./node_modules/lodash/_Symbol.js"),
+    Uint8Array = __webpack_require__(/*! ./_Uint8Array */ "./node_modules/lodash/_Uint8Array.js"),
+    eq = __webpack_require__(/*! ./eq */ "./node_modules/lodash/eq.js"),
+    equalArrays = __webpack_require__(/*! ./_equalArrays */ "./node_modules/lodash/_equalArrays.js"),
+    mapToArray = __webpack_require__(/*! ./_mapToArray */ "./node_modules/lodash/_mapToArray.js"),
+    setToArray = __webpack_require__(/*! ./_setToArray */ "./node_modules/lodash/_setToArray.js");
+
+/** Used to compose bitmasks for value comparisons. */
+var COMPARE_PARTIAL_FLAG = 1,
+    COMPARE_UNORDERED_FLAG = 2;
+
+/** `Object#toString` result references. */
+var boolTag = '[object Boolean]',
+    dateTag = '[object Date]',
+    errorTag = '[object Error]',
+    mapTag = '[object Map]',
+    numberTag = '[object Number]',
+    regexpTag = '[object RegExp]',
+    setTag = '[object Set]',
+    stringTag = '[object String]',
+    symbolTag = '[object Symbol]';
+
+var arrayBufferTag = '[object ArrayBuffer]',
+    dataViewTag = '[object DataView]';
+
+/** Used to convert symbols to primitives and strings. */
+var symbolProto = Symbol ? Symbol.prototype : undefined,
+    symbolValueOf = symbolProto ? symbolProto.valueOf : undefined;
+
+/**
+ * A specialized version of `baseIsEqualDeep` for comparing objects of
+ * the same `toStringTag`.
+ *
+ * **Note:** This function only supports comparing values with tags of
+ * `Boolean`, `Date`, `Error`, `Number`, `RegExp`, or `String`.
+ *
+ * @private
+ * @param {Object} object The object to compare.
+ * @param {Object} other The other object to compare.
+ * @param {string} tag The `toStringTag` of the objects to compare.
+ * @param {number} bitmask The bitmask flags. See `baseIsEqual` for more details.
+ * @param {Function} customizer The function to customize comparisons.
+ * @param {Function} equalFunc The function to determine equivalents of values.
+ * @param {Object} stack Tracks traversed `object` and `other` objects.
+ * @returns {boolean} Returns `true` if the objects are equivalent, else `false`.
+ */
+function equalByTag(object, other, tag, bitmask, customizer, equalFunc, stack) {
+  switch (tag) {
+    case dataViewTag:
+      if ((object.byteLength != other.byteLength) ||
+          (object.byteOffset != other.byteOffset)) {
+        return false;
+      }
+      object = object.buffer;
+      other = other.buffer;
+
+    case arrayBufferTag:
+      if ((object.byteLength != other.byteLength) ||
+          !equalFunc(new Uint8Array(object), new Uint8Array(other))) {
+        return false;
+      }
+      return true;
+
+    case boolTag:
+    case dateTag:
+    case numberTag:
+      // Coerce booleans to `1` or `0` and dates to milliseconds.
+      // Invalid dates are coerced to `NaN`.
+      return eq(+object, +other);
+
+    case errorTag:
+      return object.name == other.name && object.message == other.message;
+
+    case regexpTag:
+    case stringTag:
+      // Coerce regexes to strings and treat strings, primitives and objects,
+      // as equal. See http://www.ecma-international.org/ecma-262/7.0/#sec-regexp.prototype.tostring
+      // for more details.
+      return object == (other + '');
+
+    case mapTag:
+      var convert = mapToArray;
+
+    case setTag:
+      var isPartial = bitmask & COMPARE_PARTIAL_FLAG;
+      convert || (convert = setToArray);
+
+      if (object.size != other.size && !isPartial) {
+        return false;
+      }
+      // Assume cyclic values are equal.
+      var stacked = stack.get(object);
+      if (stacked) {
+        return stacked == other;
+      }
+      bitmask |= COMPARE_UNORDERED_FLAG;
+
+      // Recursively compare objects (susceptible to call stack limits).
+      stack.set(object, other);
+      var result = equalArrays(convert(object), convert(other), bitmask, customizer, equalFunc, stack);
+      stack['delete'](object);
+      return result;
+
+    case symbolTag:
+      if (symbolValueOf) {
+        return symbolValueOf.call(object) == symbolValueOf.call(other);
+      }
+  }
+  return false;
+}
+
+module.exports = equalByTag;
+
+
+/***/ }),
+
+/***/ "./node_modules/lodash/_equalObjects.js":
+/*!**********************************************!*\
+  !*** ./node_modules/lodash/_equalObjects.js ***!
+  \**********************************************/
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+var getAllKeys = __webpack_require__(/*! ./_getAllKeys */ "./node_modules/lodash/_getAllKeys.js");
+
+/** Used to compose bitmasks for value comparisons. */
+var COMPARE_PARTIAL_FLAG = 1;
+
+/** Used for built-in method references. */
+var objectProto = Object.prototype;
+
+/** Used to check objects for own properties. */
+var hasOwnProperty = objectProto.hasOwnProperty;
+
+/**
+ * A specialized version of `baseIsEqualDeep` for objects with support for
+ * partial deep comparisons.
+ *
+ * @private
+ * @param {Object} object The object to compare.
+ * @param {Object} other The other object to compare.
+ * @param {number} bitmask The bitmask flags. See `baseIsEqual` for more details.
+ * @param {Function} customizer The function to customize comparisons.
+ * @param {Function} equalFunc The function to determine equivalents of values.
+ * @param {Object} stack Tracks traversed `object` and `other` objects.
+ * @returns {boolean} Returns `true` if the objects are equivalent, else `false`.
+ */
+function equalObjects(object, other, bitmask, customizer, equalFunc, stack) {
+  var isPartial = bitmask & COMPARE_PARTIAL_FLAG,
+      objProps = getAllKeys(object),
+      objLength = objProps.length,
+      othProps = getAllKeys(other),
+      othLength = othProps.length;
+
+  if (objLength != othLength && !isPartial) {
+    return false;
+  }
+  var index = objLength;
+  while (index--) {
+    var key = objProps[index];
+    if (!(isPartial ? key in other : hasOwnProperty.call(other, key))) {
+      return false;
+    }
+  }
+  // Check that cyclic values are equal.
+  var objStacked = stack.get(object);
+  var othStacked = stack.get(other);
+  if (objStacked && othStacked) {
+    return objStacked == other && othStacked == object;
+  }
+  var result = true;
+  stack.set(object, other);
+  stack.set(other, object);
+
+  var skipCtor = isPartial;
+  while (++index < objLength) {
+    key = objProps[index];
+    var objValue = object[key],
+        othValue = other[key];
+
+    if (customizer) {
+      var compared = isPartial
+        ? customizer(othValue, objValue, key, other, object, stack)
+        : customizer(objValue, othValue, key, object, other, stack);
+    }
+    // Recursively compare objects (susceptible to call stack limits).
+    if (!(compared === undefined
+          ? (objValue === othValue || equalFunc(objValue, othValue, bitmask, customizer, stack))
+          : compared
+        )) {
+      result = false;
+      break;
+    }
+    skipCtor || (skipCtor = key == 'constructor');
+  }
+  if (result && !skipCtor) {
+    var objCtor = object.constructor,
+        othCtor = other.constructor;
+
+    // Non `Object` object instances with different constructors are not equal.
+    if (objCtor != othCtor &&
+        ('constructor' in object && 'constructor' in other) &&
+        !(typeof objCtor == 'function' && objCtor instanceof objCtor &&
+          typeof othCtor == 'function' && othCtor instanceof othCtor)) {
+      result = false;
+    }
+  }
+  stack['delete'](object);
+  stack['delete'](other);
+  return result;
+}
+
+module.exports = equalObjects;
 
 
 /***/ }),
@@ -11430,41 +12247,42 @@ module.exports = isIndex;
 
 /***/ }),
 
-/***/ "./node_modules/lodash/_isKey.js":
-/*!***************************************!*\
-  !*** ./node_modules/lodash/_isKey.js ***!
-  \***************************************/
+/***/ "./node_modules/lodash/_isIterateeCall.js":
+/*!************************************************!*\
+  !*** ./node_modules/lodash/_isIterateeCall.js ***!
+  \************************************************/
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
-var isArray = __webpack_require__(/*! ./isArray */ "./node_modules/lodash/isArray.js"),
-    isSymbol = __webpack_require__(/*! ./isSymbol */ "./node_modules/lodash/isSymbol.js");
-
-/** Used to match property names within property paths. */
-var reIsDeepProp = /\.|\[(?:[^[\]]*|(["'])(?:(?!\1)[^\\]|\\.)*?\1)\]/,
-    reIsPlainProp = /^\w*$/;
+var eq = __webpack_require__(/*! ./eq */ "./node_modules/lodash/eq.js"),
+    isArrayLike = __webpack_require__(/*! ./isArrayLike */ "./node_modules/lodash/isArrayLike.js"),
+    isIndex = __webpack_require__(/*! ./_isIndex */ "./node_modules/lodash/_isIndex.js"),
+    isObject = __webpack_require__(/*! ./isObject */ "./node_modules/lodash/isObject.js");
 
 /**
- * Checks if `value` is a property name and not a property path.
+ * Checks if the given arguments are from an iteratee call.
  *
  * @private
- * @param {*} value The value to check.
- * @param {Object} [object] The object to query keys on.
- * @returns {boolean} Returns `true` if `value` is a property name, else `false`.
+ * @param {*} value The potential iteratee value argument.
+ * @param {*} index The potential iteratee index or key argument.
+ * @param {*} object The potential iteratee object argument.
+ * @returns {boolean} Returns `true` if the arguments are from an iteratee call,
+ *  else `false`.
  */
-function isKey(value, object) {
-  if (isArray(value)) {
+function isIterateeCall(value, index, object) {
+  if (!isObject(object)) {
     return false;
   }
-  var type = typeof value;
-  if (type == 'number' || type == 'symbol' || type == 'boolean' ||
-      value == null || isSymbol(value)) {
-    return true;
+  var type = typeof index;
+  if (type == 'number'
+        ? (isArrayLike(object) && isIndex(index, object.length))
+        : (type == 'string' && index in object)
+      ) {
+    return eq(object[index], value);
   }
-  return reIsPlainProp.test(value) || !reIsDeepProp.test(value) ||
-    (object != null && value in Object(object));
+  return false;
 }
 
-module.exports = isKey;
+module.exports = isIterateeCall;
 
 
 /***/ }),
@@ -11854,38 +12672,30 @@ module.exports = mapCacheSet;
 
 /***/ }),
 
-/***/ "./node_modules/lodash/_memoizeCapped.js":
-/*!***********************************************!*\
-  !*** ./node_modules/lodash/_memoizeCapped.js ***!
-  \***********************************************/
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
-
-var memoize = __webpack_require__(/*! ./memoize */ "./node_modules/lodash/memoize.js");
-
-/** Used as the maximum memoize cache size. */
-var MAX_MEMOIZE_SIZE = 500;
+/***/ "./node_modules/lodash/_mapToArray.js":
+/*!********************************************!*\
+  !*** ./node_modules/lodash/_mapToArray.js ***!
+  \********************************************/
+/***/ ((module) => {
 
 /**
- * A specialized version of `_.memoize` which clears the memoized function's
- * cache when it exceeds `MAX_MEMOIZE_SIZE`.
+ * Converts `map` to its key-value pairs.
  *
  * @private
- * @param {Function} func The function to have its output memoized.
- * @returns {Function} Returns the new memoized function.
+ * @param {Object} map The map to convert.
+ * @returns {Array} Returns the key-value pairs.
  */
-function memoizeCapped(func) {
-  var result = memoize(func, function(key) {
-    if (cache.size === MAX_MEMOIZE_SIZE) {
-      cache.clear();
-    }
-    return key;
-  });
+function mapToArray(map) {
+  var index = -1,
+      result = Array(map.size);
 
-  var cache = result.cache;
+  map.forEach(function(value, key) {
+    result[++index] = [key, value];
+  });
   return result;
 }
 
-module.exports = memoizeCapped;
+module.exports = mapToArray;
 
 
 /***/ }),
@@ -12050,6 +12860,52 @@ module.exports = overArg;
 
 /***/ }),
 
+/***/ "./node_modules/lodash/_overRest.js":
+/*!******************************************!*\
+  !*** ./node_modules/lodash/_overRest.js ***!
+  \******************************************/
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+var apply = __webpack_require__(/*! ./_apply */ "./node_modules/lodash/_apply.js");
+
+/* Built-in method references for those with the same name as other `lodash` methods. */
+var nativeMax = Math.max;
+
+/**
+ * A specialized version of `baseRest` which transforms the rest array.
+ *
+ * @private
+ * @param {Function} func The function to apply a rest parameter to.
+ * @param {number} [start=func.length-1] The start position of the rest parameter.
+ * @param {Function} transform The rest array transform.
+ * @returns {Function} Returns the new function.
+ */
+function overRest(func, start, transform) {
+  start = nativeMax(start === undefined ? (func.length - 1) : start, 0);
+  return function() {
+    var args = arguments,
+        index = -1,
+        length = nativeMax(args.length - start, 0),
+        array = Array(length);
+
+    while (++index < length) {
+      array[index] = args[start + index];
+    }
+    index = -1;
+    var otherArgs = Array(start + 1);
+    while (++index < start) {
+      otherArgs[index] = args[index];
+    }
+    otherArgs[start] = transform(array);
+    return apply(func, this, otherArgs);
+  };
+}
+
+module.exports = overRest;
+
+
+/***/ }),
+
 /***/ "./node_modules/lodash/_root.js":
 /*!**************************************!*\
   !*** ./node_modules/lodash/_root.js ***!
@@ -12065,6 +12921,189 @@ var freeSelf = typeof self == 'object' && self && self.Object === Object && self
 var root = freeGlobal || freeSelf || Function('return this')();
 
 module.exports = root;
+
+
+/***/ }),
+
+/***/ "./node_modules/lodash/_safeGet.js":
+/*!*****************************************!*\
+  !*** ./node_modules/lodash/_safeGet.js ***!
+  \*****************************************/
+/***/ ((module) => {
+
+/**
+ * Gets the value at `key`, unless `key` is "__proto__" or "constructor".
+ *
+ * @private
+ * @param {Object} object The object to query.
+ * @param {string} key The key of the property to get.
+ * @returns {*} Returns the property value.
+ */
+function safeGet(object, key) {
+  if (key === 'constructor' && typeof object[key] === 'function') {
+    return;
+  }
+
+  if (key == '__proto__') {
+    return;
+  }
+
+  return object[key];
+}
+
+module.exports = safeGet;
+
+
+/***/ }),
+
+/***/ "./node_modules/lodash/_setCacheAdd.js":
+/*!*********************************************!*\
+  !*** ./node_modules/lodash/_setCacheAdd.js ***!
+  \*********************************************/
+/***/ ((module) => {
+
+/** Used to stand-in for `undefined` hash values. */
+var HASH_UNDEFINED = '__lodash_hash_undefined__';
+
+/**
+ * Adds `value` to the array cache.
+ *
+ * @private
+ * @name add
+ * @memberOf SetCache
+ * @alias push
+ * @param {*} value The value to cache.
+ * @returns {Object} Returns the cache instance.
+ */
+function setCacheAdd(value) {
+  this.__data__.set(value, HASH_UNDEFINED);
+  return this;
+}
+
+module.exports = setCacheAdd;
+
+
+/***/ }),
+
+/***/ "./node_modules/lodash/_setCacheHas.js":
+/*!*********************************************!*\
+  !*** ./node_modules/lodash/_setCacheHas.js ***!
+  \*********************************************/
+/***/ ((module) => {
+
+/**
+ * Checks if `value` is in the array cache.
+ *
+ * @private
+ * @name has
+ * @memberOf SetCache
+ * @param {*} value The value to search for.
+ * @returns {number} Returns `true` if `value` is found, else `false`.
+ */
+function setCacheHas(value) {
+  return this.__data__.has(value);
+}
+
+module.exports = setCacheHas;
+
+
+/***/ }),
+
+/***/ "./node_modules/lodash/_setToArray.js":
+/*!********************************************!*\
+  !*** ./node_modules/lodash/_setToArray.js ***!
+  \********************************************/
+/***/ ((module) => {
+
+/**
+ * Converts `set` to an array of its values.
+ *
+ * @private
+ * @param {Object} set The set to convert.
+ * @returns {Array} Returns the values.
+ */
+function setToArray(set) {
+  var index = -1,
+      result = Array(set.size);
+
+  set.forEach(function(value) {
+    result[++index] = value;
+  });
+  return result;
+}
+
+module.exports = setToArray;
+
+
+/***/ }),
+
+/***/ "./node_modules/lodash/_setToString.js":
+/*!*********************************************!*\
+  !*** ./node_modules/lodash/_setToString.js ***!
+  \*********************************************/
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+var baseSetToString = __webpack_require__(/*! ./_baseSetToString */ "./node_modules/lodash/_baseSetToString.js"),
+    shortOut = __webpack_require__(/*! ./_shortOut */ "./node_modules/lodash/_shortOut.js");
+
+/**
+ * Sets the `toString` method of `func` to return `string`.
+ *
+ * @private
+ * @param {Function} func The function to modify.
+ * @param {Function} string The `toString` result.
+ * @returns {Function} Returns `func`.
+ */
+var setToString = shortOut(baseSetToString);
+
+module.exports = setToString;
+
+
+/***/ }),
+
+/***/ "./node_modules/lodash/_shortOut.js":
+/*!******************************************!*\
+  !*** ./node_modules/lodash/_shortOut.js ***!
+  \******************************************/
+/***/ ((module) => {
+
+/** Used to detect hot functions by number of calls within a span of milliseconds. */
+var HOT_COUNT = 800,
+    HOT_SPAN = 16;
+
+/* Built-in method references for those with the same name as other `lodash` methods. */
+var nativeNow = Date.now;
+
+/**
+ * Creates a function that'll short out and invoke `identity` instead
+ * of `func` when it's called `HOT_COUNT` or more times in `HOT_SPAN`
+ * milliseconds.
+ *
+ * @private
+ * @param {Function} func The function to restrict.
+ * @returns {Function} Returns the new shortable function.
+ */
+function shortOut(func) {
+  var count = 0,
+      lastCalled = 0;
+
+  return function() {
+    var stamp = nativeNow(),
+        remaining = HOT_SPAN - (stamp - lastCalled);
+
+    lastCalled = stamp;
+    if (remaining > 0) {
+      if (++count >= HOT_COUNT) {
+        return arguments[0];
+      }
+    } else {
+      count = 0;
+    }
+    return func.apply(undefined, arguments);
+  };
+}
+
+module.exports = shortOut;
 
 
 /***/ }),
@@ -12214,74 +13253,6 @@ module.exports = stackSet;
 
 /***/ }),
 
-/***/ "./node_modules/lodash/_stringToPath.js":
-/*!**********************************************!*\
-  !*** ./node_modules/lodash/_stringToPath.js ***!
-  \**********************************************/
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
-
-var memoizeCapped = __webpack_require__(/*! ./_memoizeCapped */ "./node_modules/lodash/_memoizeCapped.js");
-
-/** Used to match property names within property paths. */
-var rePropName = /[^.[\]]+|\[(?:(-?\d+(?:\.\d+)?)|(["'])((?:(?!\2)[^\\]|\\.)*?)\2)\]|(?=(?:\.|\[\])(?:\.|\[\]|$))/g;
-
-/** Used to match backslashes in property paths. */
-var reEscapeChar = /\\(\\)?/g;
-
-/**
- * Converts `string` to a property path array.
- *
- * @private
- * @param {string} string The string to convert.
- * @returns {Array} Returns the property path array.
- */
-var stringToPath = memoizeCapped(function(string) {
-  var result = [];
-  if (string.charCodeAt(0) === 46 /* . */) {
-    result.push('');
-  }
-  string.replace(rePropName, function(match, number, quote, subString) {
-    result.push(quote ? subString.replace(reEscapeChar, '$1') : (number || match));
-  });
-  return result;
-});
-
-module.exports = stringToPath;
-
-
-/***/ }),
-
-/***/ "./node_modules/lodash/_toKey.js":
-/*!***************************************!*\
-  !*** ./node_modules/lodash/_toKey.js ***!
-  \***************************************/
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
-
-var isSymbol = __webpack_require__(/*! ./isSymbol */ "./node_modules/lodash/isSymbol.js");
-
-/** Used as references for various `Number` constants. */
-var INFINITY = 1 / 0;
-
-/**
- * Converts `value` to a string key if it's not a string or symbol.
- *
- * @private
- * @param {*} value The value to inspect.
- * @returns {string|symbol} Returns the key.
- */
-function toKey(value) {
-  if (typeof value == 'string' || isSymbol(value)) {
-    return value;
-  }
-  var result = (value + '');
-  return (result == '0' && (1 / value) == -INFINITY) ? '-0' : result;
-}
-
-module.exports = toKey;
-
-
-/***/ }),
-
 /***/ "./node_modules/lodash/_toSource.js":
 /*!******************************************!*\
   !*** ./node_modules/lodash/_toSource.js ***!
@@ -12357,6 +13328,42 @@ module.exports = cloneDeep;
 
 /***/ }),
 
+/***/ "./node_modules/lodash/constant.js":
+/*!*****************************************!*\
+  !*** ./node_modules/lodash/constant.js ***!
+  \*****************************************/
+/***/ ((module) => {
+
+/**
+ * Creates a function that returns `value`.
+ *
+ * @static
+ * @memberOf _
+ * @since 2.4.0
+ * @category Util
+ * @param {*} value The value to return from the new function.
+ * @returns {Function} Returns the new constant function.
+ * @example
+ *
+ * var objects = _.times(2, _.constant({ 'a': 1 }));
+ *
+ * console.log(objects);
+ * // => [{ 'a': 1 }, { 'a': 1 }]
+ *
+ * console.log(objects[0] === objects[1]);
+ * // => true
+ */
+function constant(value) {
+  return function() {
+    return value;
+  };
+}
+
+module.exports = constant;
+
+
+/***/ }),
+
 /***/ "./node_modules/lodash/eq.js":
 /*!***********************************!*\
   !*** ./node_modules/lodash/eq.js ***!
@@ -12404,45 +13411,33 @@ module.exports = eq;
 
 /***/ }),
 
-/***/ "./node_modules/lodash/get.js":
-/*!************************************!*\
-  !*** ./node_modules/lodash/get.js ***!
-  \************************************/
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
-
-var baseGet = __webpack_require__(/*! ./_baseGet */ "./node_modules/lodash/_baseGet.js");
+/***/ "./node_modules/lodash/identity.js":
+/*!*****************************************!*\
+  !*** ./node_modules/lodash/identity.js ***!
+  \*****************************************/
+/***/ ((module) => {
 
 /**
- * Gets the value at `path` of `object`. If the resolved value is
- * `undefined`, the `defaultValue` is returned in its place.
+ * This method returns the first argument it receives.
  *
  * @static
+ * @since 0.1.0
  * @memberOf _
- * @since 3.7.0
- * @category Object
- * @param {Object} object The object to query.
- * @param {Array|string} path The path of the property to get.
- * @param {*} [defaultValue] The value returned for `undefined` resolved values.
- * @returns {*} Returns the resolved value.
+ * @category Util
+ * @param {*} value Any value.
+ * @returns {*} Returns `value`.
  * @example
  *
- * var object = { 'a': [{ 'b': { 'c': 3 } }] };
+ * var object = { 'a': 1 };
  *
- * _.get(object, 'a[0].b.c');
- * // => 3
- *
- * _.get(object, ['a', '0', 'b', 'c']);
- * // => 3
- *
- * _.get(object, 'a.b.c', 'default');
- * // => 'default'
+ * console.log(_.identity(object) === object);
+ * // => true
  */
-function get(object, path, defaultValue) {
-  var result = object == null ? undefined : baseGet(object, path);
-  return result === undefined ? defaultValue : result;
+function identity(value) {
+  return value;
 }
 
-module.exports = get;
+module.exports = identity;
 
 
 /***/ }),
@@ -12572,6 +13567,49 @@ module.exports = isArrayLike;
 
 /***/ }),
 
+/***/ "./node_modules/lodash/isArrayLikeObject.js":
+/*!**************************************************!*\
+  !*** ./node_modules/lodash/isArrayLikeObject.js ***!
+  \**************************************************/
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+var isArrayLike = __webpack_require__(/*! ./isArrayLike */ "./node_modules/lodash/isArrayLike.js"),
+    isObjectLike = __webpack_require__(/*! ./isObjectLike */ "./node_modules/lodash/isObjectLike.js");
+
+/**
+ * This method is like `_.isArrayLike` except that it also checks if `value`
+ * is an object.
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is an array-like object,
+ *  else `false`.
+ * @example
+ *
+ * _.isArrayLikeObject([1, 2, 3]);
+ * // => true
+ *
+ * _.isArrayLikeObject(document.body.children);
+ * // => true
+ *
+ * _.isArrayLikeObject('abc');
+ * // => false
+ *
+ * _.isArrayLikeObject(_.noop);
+ * // => false
+ */
+function isArrayLikeObject(value) {
+  return isObjectLike(value) && isArrayLike(value);
+}
+
+module.exports = isArrayLikeObject;
+
+
+/***/ }),
+
 /***/ "./node_modules/lodash/isBuffer.js":
 /*!*****************************************!*\
   !*** ./node_modules/lodash/isBuffer.js ***!
@@ -12617,6 +13655,51 @@ var nativeIsBuffer = Buffer ? Buffer.isBuffer : undefined;
 var isBuffer = nativeIsBuffer || stubFalse;
 
 module.exports = isBuffer;
+
+
+/***/ }),
+
+/***/ "./node_modules/lodash/isEqual.js":
+/*!****************************************!*\
+  !*** ./node_modules/lodash/isEqual.js ***!
+  \****************************************/
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+var baseIsEqual = __webpack_require__(/*! ./_baseIsEqual */ "./node_modules/lodash/_baseIsEqual.js");
+
+/**
+ * Performs a deep comparison between two values to determine if they are
+ * equivalent.
+ *
+ * **Note:** This method supports comparing arrays, array buffers, booleans,
+ * date objects, error objects, maps, numbers, `Object` objects, regexes,
+ * sets, strings, symbols, and typed arrays. `Object` objects are compared
+ * by their own, not inherited, enumerable properties. Functions and DOM
+ * nodes are compared by strict equality, i.e. `===`.
+ *
+ * @static
+ * @memberOf _
+ * @since 0.1.0
+ * @category Lang
+ * @param {*} value The value to compare.
+ * @param {*} other The other value to compare.
+ * @returns {boolean} Returns `true` if the values are equivalent, else `false`.
+ * @example
+ *
+ * var object = { 'a': 1 };
+ * var other = { 'a': 1 };
+ *
+ * _.isEqual(object, other);
+ * // => true
+ *
+ * object === other;
+ * // => false
+ */
+function isEqual(value, other) {
+  return baseIsEqual(value, other);
+}
+
+module.exports = isEqual;
 
 
 /***/ }),
@@ -12830,6 +13913,78 @@ module.exports = isObjectLike;
 
 /***/ }),
 
+/***/ "./node_modules/lodash/isPlainObject.js":
+/*!**********************************************!*\
+  !*** ./node_modules/lodash/isPlainObject.js ***!
+  \**********************************************/
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+var baseGetTag = __webpack_require__(/*! ./_baseGetTag */ "./node_modules/lodash/_baseGetTag.js"),
+    getPrototype = __webpack_require__(/*! ./_getPrototype */ "./node_modules/lodash/_getPrototype.js"),
+    isObjectLike = __webpack_require__(/*! ./isObjectLike */ "./node_modules/lodash/isObjectLike.js");
+
+/** `Object#toString` result references. */
+var objectTag = '[object Object]';
+
+/** Used for built-in method references. */
+var funcProto = Function.prototype,
+    objectProto = Object.prototype;
+
+/** Used to resolve the decompiled source of functions. */
+var funcToString = funcProto.toString;
+
+/** Used to check objects for own properties. */
+var hasOwnProperty = objectProto.hasOwnProperty;
+
+/** Used to infer the `Object` constructor. */
+var objectCtorString = funcToString.call(Object);
+
+/**
+ * Checks if `value` is a plain object, that is, an object created by the
+ * `Object` constructor or one with a `[[Prototype]]` of `null`.
+ *
+ * @static
+ * @memberOf _
+ * @since 0.8.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a plain object, else `false`.
+ * @example
+ *
+ * function Foo() {
+ *   this.a = 1;
+ * }
+ *
+ * _.isPlainObject(new Foo);
+ * // => false
+ *
+ * _.isPlainObject([1, 2, 3]);
+ * // => false
+ *
+ * _.isPlainObject({ 'x': 0, 'y': 0 });
+ * // => true
+ *
+ * _.isPlainObject(Object.create(null));
+ * // => true
+ */
+function isPlainObject(value) {
+  if (!isObjectLike(value) || baseGetTag(value) != objectTag) {
+    return false;
+  }
+  var proto = getPrototype(value);
+  if (proto === null) {
+    return true;
+  }
+  var Ctor = hasOwnProperty.call(proto, 'constructor') && proto.constructor;
+  return typeof Ctor == 'function' && Ctor instanceof Ctor &&
+    funcToString.call(Ctor) == objectCtorString;
+}
+
+module.exports = isPlainObject;
+
+
+/***/ }),
+
 /***/ "./node_modules/lodash/isSet.js":
 /*!**************************************!*\
   !*** ./node_modules/lodash/isSet.js ***!
@@ -12863,45 +14018,6 @@ var nodeIsSet = nodeUtil && nodeUtil.isSet;
 var isSet = nodeIsSet ? baseUnary(nodeIsSet) : baseIsSet;
 
 module.exports = isSet;
-
-
-/***/ }),
-
-/***/ "./node_modules/lodash/isSymbol.js":
-/*!*****************************************!*\
-  !*** ./node_modules/lodash/isSymbol.js ***!
-  \*****************************************/
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
-
-var baseGetTag = __webpack_require__(/*! ./_baseGetTag */ "./node_modules/lodash/_baseGetTag.js"),
-    isObjectLike = __webpack_require__(/*! ./isObjectLike */ "./node_modules/lodash/isObjectLike.js");
-
-/** `Object#toString` result references. */
-var symbolTag = '[object Symbol]';
-
-/**
- * Checks if `value` is classified as a `Symbol` primitive or object.
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a symbol, else `false`.
- * @example
- *
- * _.isSymbol(Symbol.iterator);
- * // => true
- *
- * _.isSymbol('abc');
- * // => false
- */
-function isSymbol(value) {
-  return typeof value == 'symbol' ||
-    (isObjectLike(value) && baseGetTag(value) == symbolTag);
-}
-
-module.exports = isSymbol;
 
 
 /***/ }),
@@ -13032,130 +14148,51 @@ module.exports = keysIn;
 
 /***/ }),
 
-/***/ "./node_modules/lodash/memoize.js":
-/*!****************************************!*\
-  !*** ./node_modules/lodash/memoize.js ***!
-  \****************************************/
+/***/ "./node_modules/lodash/merge.js":
+/*!**************************************!*\
+  !*** ./node_modules/lodash/merge.js ***!
+  \**************************************/
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
-var MapCache = __webpack_require__(/*! ./_MapCache */ "./node_modules/lodash/_MapCache.js");
-
-/** Error message constants. */
-var FUNC_ERROR_TEXT = 'Expected a function';
+var baseMerge = __webpack_require__(/*! ./_baseMerge */ "./node_modules/lodash/_baseMerge.js"),
+    createAssigner = __webpack_require__(/*! ./_createAssigner */ "./node_modules/lodash/_createAssigner.js");
 
 /**
- * Creates a function that memoizes the result of `func`. If `resolver` is
- * provided, it determines the cache key for storing the result based on the
- * arguments provided to the memoized function. By default, the first argument
- * provided to the memoized function is used as the map cache key. The `func`
- * is invoked with the `this` binding of the memoized function.
- *
- * **Note:** The cache is exposed as the `cache` property on the memoized
- * function. Its creation may be customized by replacing the `_.memoize.Cache`
- * constructor with one whose instances implement the
- * [`Map`](http://ecma-international.org/ecma-262/7.0/#sec-properties-of-the-map-prototype-object)
- * method interface of `clear`, `delete`, `get`, `has`, and `set`.
- *
- * @static
- * @memberOf _
- * @since 0.1.0
- * @category Function
- * @param {Function} func The function to have its output memoized.
- * @param {Function} [resolver] The function to resolve the cache key.
- * @returns {Function} Returns the new memoized function.
- * @example
- *
- * var object = { 'a': 1, 'b': 2 };
- * var other = { 'c': 3, 'd': 4 };
- *
- * var values = _.memoize(_.values);
- * values(object);
- * // => [1, 2]
- *
- * values(other);
- * // => [3, 4]
- *
- * object.a = 2;
- * values(object);
- * // => [1, 2]
- *
- * // Modify the result cache.
- * values.cache.set(object, ['a', 'b']);
- * values(object);
- * // => ['a', 'b']
- *
- * // Replace `_.memoize.Cache`.
- * _.memoize.Cache = WeakMap;
- */
-function memoize(func, resolver) {
-  if (typeof func != 'function' || (resolver != null && typeof resolver != 'function')) {
-    throw new TypeError(FUNC_ERROR_TEXT);
-  }
-  var memoized = function() {
-    var args = arguments,
-        key = resolver ? resolver.apply(this, args) : args[0],
-        cache = memoized.cache;
-
-    if (cache.has(key)) {
-      return cache.get(key);
-    }
-    var result = func.apply(this, args);
-    memoized.cache = cache.set(key, result) || cache;
-    return result;
-  };
-  memoized.cache = new (memoize.Cache || MapCache);
-  return memoized;
-}
-
-// Expose `MapCache`.
-memoize.Cache = MapCache;
-
-module.exports = memoize;
-
-
-/***/ }),
-
-/***/ "./node_modules/lodash/set.js":
-/*!************************************!*\
-  !*** ./node_modules/lodash/set.js ***!
-  \************************************/
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
-
-var baseSet = __webpack_require__(/*! ./_baseSet */ "./node_modules/lodash/_baseSet.js");
-
-/**
- * Sets the value at `path` of `object`. If a portion of `path` doesn't exist,
- * it's created. Arrays are created for missing index properties while objects
- * are created for all other missing properties. Use `_.setWith` to customize
- * `path` creation.
+ * This method is like `_.assign` except that it recursively merges own and
+ * inherited enumerable string keyed properties of source objects into the
+ * destination object. Source properties that resolve to `undefined` are
+ * skipped if a destination value exists. Array and plain object properties
+ * are merged recursively. Other objects and value types are overridden by
+ * assignment. Source objects are applied from left to right. Subsequent
+ * sources overwrite property assignments of previous sources.
  *
  * **Note:** This method mutates `object`.
  *
  * @static
  * @memberOf _
- * @since 3.7.0
+ * @since 0.5.0
  * @category Object
- * @param {Object} object The object to modify.
- * @param {Array|string} path The path of the property to set.
- * @param {*} value The value to set.
+ * @param {Object} object The destination object.
+ * @param {...Object} [sources] The source objects.
  * @returns {Object} Returns `object`.
  * @example
  *
- * var object = { 'a': [{ 'b': { 'c': 3 } }] };
+ * var object = {
+ *   'a': [{ 'b': 2 }, { 'd': 4 }]
+ * };
  *
- * _.set(object, 'a[0].b.c', 4);
- * console.log(object.a[0].b.c);
- * // => 4
+ * var other = {
+ *   'a': [{ 'c': 3 }, { 'e': 5 }]
+ * };
  *
- * _.set(object, ['x', '0', 'y', 'z'], 5);
- * console.log(object.x[0].y.z);
- * // => 5
+ * _.merge(object, other);
+ * // => { 'a': [{ 'b': 2, 'c': 3 }, { 'd': 4, 'e': 5 }] }
  */
-function set(object, path, value) {
-  return object == null ? object : baseSet(object, path, value);
-}
+var merge = createAssigner(function(object, source, srcIndex) {
+  baseMerge(object, source, srcIndex);
+});
 
-module.exports = set;
+module.exports = merge;
 
 
 /***/ }),
@@ -13221,40 +14258,44 @@ module.exports = stubFalse;
 
 /***/ }),
 
-/***/ "./node_modules/lodash/toString.js":
-/*!*****************************************!*\
-  !*** ./node_modules/lodash/toString.js ***!
-  \*****************************************/
+/***/ "./node_modules/lodash/toPlainObject.js":
+/*!**********************************************!*\
+  !*** ./node_modules/lodash/toPlainObject.js ***!
+  \**********************************************/
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
-var baseToString = __webpack_require__(/*! ./_baseToString */ "./node_modules/lodash/_baseToString.js");
+var copyObject = __webpack_require__(/*! ./_copyObject */ "./node_modules/lodash/_copyObject.js"),
+    keysIn = __webpack_require__(/*! ./keysIn */ "./node_modules/lodash/keysIn.js");
 
 /**
- * Converts `value` to a string. An empty string is returned for `null`
- * and `undefined` values. The sign of `-0` is preserved.
+ * Converts `value` to a plain object flattening inherited enumerable string
+ * keyed properties of `value` to own properties of the plain object.
  *
  * @static
  * @memberOf _
- * @since 4.0.0
+ * @since 3.0.0
  * @category Lang
  * @param {*} value The value to convert.
- * @returns {string} Returns the converted string.
+ * @returns {Object} Returns the converted plain object.
  * @example
  *
- * _.toString(null);
- * // => ''
+ * function Foo() {
+ *   this.b = 2;
+ * }
  *
- * _.toString(-0);
- * // => '-0'
+ * Foo.prototype.c = 3;
  *
- * _.toString([1, 2, 3]);
- * // => '1,2,3'
+ * _.assign({ 'a': 1 }, new Foo);
+ * // => { 'a': 1, 'b': 2 }
+ *
+ * _.assign({ 'a': 1 }, _.toPlainObject(new Foo));
+ * // => { 'a': 1, 'b': 2, 'c': 3 }
  */
-function toString(value) {
-  return value == null ? '' : baseToString(value);
+function toPlainObject(value) {
+  return copyObject(value, keysIn(value));
 }
 
-module.exports = toString;
+module.exports = toPlainObject;
 
 
 /***/ }),
@@ -16877,7 +17918,7 @@ License: MIT
 /***/ ((module) => {
 
 "use strict";
-module.exports = JSON.parse('{"calendar.options[0].tileSize":"16","calendar.options[1].tileShape":"rectangle","calendar.options[2].tileColor":"#dddddd","calendar.options[3].tileFuture":"true","calendar.options[4].tilePadding":"4.5","calendar.options[5].monthPadding":"10","calendar.options[6].monthGap":"true","calendar.options[7].weekStart":"0","title.options[1].fontFamily":"system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Noto Sans, Liberation Sans, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji","title.options[2].fontSize":"36","title.options[3].fontWeight":"normal","title.options[4].textAlignment":"start","title.options[5].fontColor":"#212529","subtitle.options[1].fontFamily":"system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Noto Sans, Liberation Sans, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji","subtitle.options[2].fontSize":"24","subtitle.options[3].fontWeight":"normal","subtitle.options[4].textAlignment":"start","subtitle.options[5].fontColor":"#65696c","calendar-month.options[0].format":"MMM \'YY","calendar-month.options[1].fontFamily":"system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Noto Sans, Liberation Sans, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji","calendar-month.options[2].fontSize":"18","calendar-month.options[3].fontWeight":"normal","calendar-month.options[4].textAlignment":"middle","calendar-month.options[5].fontColor":"#212529","calendar-week.options[0].format":"ddd","calendar-week.options[1].fontFamily":"system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Noto Sans, Liberation Sans, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji","calendar-week.options[2].fontSize":"18","calendar-week.options[3].fontWeight":"normal","calendar-week.options[4].textAlignment":"start","calendar-week.options[5].fontColor":"#212529","legend.options[0].position":"right","legend.options[1].suffix":"","legend.options[2].labels":"true","legend.options[3].fontFamily":"system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Noto Sans, Liberation Sans, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji","legend.options[4].fontSize":"18","legend.options[5].fontWeight":"normal","legend.options[6].textAlignment":"start","legend.options[7].fontColor":"#212529","scale.show":"true","scale.options[0].name":"Greens","scale.options[2].colors":"5","scale.options[3].mode":"rgb","scale.options[5].gamma":"1","scale.options[6].nodata":"#eeeeee","transform.options[0].fn":"log10","tooltip.options[0].format":"YYYY-MM-DD","tooltip.options[1].data":"true","title.show":"false","subtitle.show":"false","calendar-month.show":"false","calendar-week.show":"false","legend.show":"false","data-input.show":"false","scale.options[1].reverse":"false","scale.options[4].correctLightness":"false","transform.show":"false","hover.show":"false","tooltip.show":"false"}');
+module.exports = JSON.parse('{"title":{"show":false},"subtitle":{"show":false},"calendar-month":{"show":false},"calendar-week":{"show":false},"hover":{"show":false},"tooltip":{"show":false},"legend":{"labels":false}}');
 
 /***/ })
 
@@ -16984,29 +18025,36 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   "default": () => (/* binding */ CalendarHeatmap)
 /* harmony export */ });
-/* harmony import */ var lodash_set__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! lodash/set */ "./node_modules/lodash/set.js");
-/* harmony import */ var lodash_set__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(lodash_set__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var lodash_get__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! lodash/get */ "./node_modules/lodash/get.js");
-/* harmony import */ var lodash_get__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(lodash_get__WEBPACK_IMPORTED_MODULE_1__);
-/* harmony import */ var lodash_cloneDeep__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! lodash/cloneDeep */ "./node_modules/lodash/cloneDeep.js");
-/* harmony import */ var lodash_cloneDeep__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(lodash_cloneDeep__WEBPACK_IMPORTED_MODULE_2__);
-/* harmony import */ var papaparse__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! papaparse */ "./node_modules/papaparse/papaparse.min.js");
-/* harmony import */ var papaparse__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(papaparse__WEBPACK_IMPORTED_MODULE_3__);
-/* harmony import */ var _constants_settings__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./constants/settings */ "./src/constants/settings.js");
-/* harmony import */ var _constants_presets__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./constants/presets */ "./src/constants/presets.js");
-/* harmony import */ var _components_title__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./components/title */ "./src/components/title.js");
-/* harmony import */ var _components_subtitle__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ./components/subtitle */ "./src/components/subtitle.js");
-/* harmony import */ var _components_scale__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ./components/scale */ "./src/components/scale.js");
-/* harmony import */ var _components_legend__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ./components/legend */ "./src/components/legend.js");
-/* harmony import */ var _components_transform__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! ./components/transform */ "./src/components/transform.js");
-/* harmony import */ var _components_tooltip__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! ./components/tooltip */ "./src/components/tooltip.js");
-/* harmony import */ var _components_hover__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! ./components/hover */ "./src/components/hover.js");
-/* harmony import */ var _components_calendar__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(/*! ./components/calendar */ "./src/components/calendar.js");
-/* harmony import */ var _components_calendar_month__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(/*! ./components/calendar-month */ "./src/components/calendar-month.js");
-/* harmony import */ var _components_calendar_week__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(/*! ./components/calendar-week */ "./src/components/calendar-week.js");
-/* harmony import */ var _components_data__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(/*! ./components/data */ "./src/components/data.js");
-/* harmony import */ var _svgdotjs_svg_js__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(/*! @svgdotjs/svg.js */ "./node_modules/@svgdotjs/svg.js/dist/svg.esm.js");
-/* harmony import */ var _components_i18n__WEBPACK_IMPORTED_MODULE_18__ = __webpack_require__(/*! ./components/i18n */ "./src/components/i18n.js");
+/* harmony import */ var lodash_cloneDeep__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! lodash/cloneDeep */ "./node_modules/lodash/cloneDeep.js");
+/* harmony import */ var lodash_cloneDeep__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(lodash_cloneDeep__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var lodash_isEqual__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! lodash/isEqual */ "./node_modules/lodash/isEqual.js");
+/* harmony import */ var lodash_isEqual__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(lodash_isEqual__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var lodash_isPlainObject__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! lodash/isPlainObject */ "./node_modules/lodash/isPlainObject.js");
+/* harmony import */ var lodash_isPlainObject__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(lodash_isPlainObject__WEBPACK_IMPORTED_MODULE_2__);
+/* harmony import */ var lodash_merge__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! lodash/merge */ "./node_modules/lodash/merge.js");
+/* harmony import */ var lodash_merge__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(lodash_merge__WEBPACK_IMPORTED_MODULE_3__);
+/* harmony import */ var papaparse__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! papaparse */ "./node_modules/papaparse/papaparse.min.js");
+/* harmony import */ var papaparse__WEBPACK_IMPORTED_MODULE_4___default = /*#__PURE__*/__webpack_require__.n(papaparse__WEBPACK_IMPORTED_MODULE_4__);
+/* harmony import */ var _constants_settings__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./constants/settings */ "./src/constants/settings.js");
+/* harmony import */ var _constants_presets__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./constants/presets */ "./src/constants/presets.js");
+/* harmony import */ var _components_title__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ./components/title */ "./src/components/title.js");
+/* harmony import */ var _components_subtitle__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ./components/subtitle */ "./src/components/subtitle.js");
+/* harmony import */ var _components_scale__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ./components/scale */ "./src/components/scale.js");
+/* harmony import */ var _components_legend__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! ./components/legend */ "./src/components/legend.js");
+/* harmony import */ var _components_transform__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! ./components/transform */ "./src/components/transform.js");
+/* harmony import */ var _components_tooltip__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! ./components/tooltip */ "./src/components/tooltip.js");
+/* harmony import */ var _components_darkmode__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(/*! ./components/darkmode */ "./src/components/darkmode.js");
+/* harmony import */ var _components_hover__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(/*! ./components/hover */ "./src/components/hover.js");
+/* harmony import */ var _components_calendar__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(/*! ./components/calendar */ "./src/components/calendar.js");
+/* harmony import */ var _components_calendar_month__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(/*! ./components/calendar-month */ "./src/components/calendar-month.js");
+/* harmony import */ var _components_calendar_week__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(/*! ./components/calendar-week */ "./src/components/calendar-week.js");
+/* harmony import */ var _components_data__WEBPACK_IMPORTED_MODULE_18__ = __webpack_require__(/*! ./components/data */ "./src/components/data.js");
+/* harmony import */ var _svgdotjs_svg_js__WEBPACK_IMPORTED_MODULE_19__ = __webpack_require__(/*! @svgdotjs/svg.js */ "./node_modules/@svgdotjs/svg.js/dist/svg.esm.js");
+/* harmony import */ var _components_i18n__WEBPACK_IMPORTED_MODULE_20__ = __webpack_require__(/*! ./components/i18n */ "./src/components/i18n.js");
+/* harmony import */ var _helpers_generateDarkColor__WEBPACK_IMPORTED_MODULE_21__ = __webpack_require__(/*! ./helpers/generateDarkColor */ "./src/helpers/generateDarkColor.js");
+function _createForOfIteratorHelper(o, allowArrayLike) { var it = typeof Symbol !== "undefined" && o[Symbol.iterator] || o["@@iterator"]; if (!it) { if (Array.isArray(o) || (it = _unsupportedIterableToArray(o)) || allowArrayLike && o && typeof o.length === "number") { if (it) o = it; var i = 0; var F = function F() {}; return { s: F, n: function n() { if (i >= o.length) return { done: true }; return { done: false, value: o[i++] }; }, e: function e(_e) { throw _e; }, f: F }; } throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); } var normalCompletion = true, didErr = false, err; return { s: function s() { it = it.call(o); }, n: function n() { var step = it.next(); normalCompletion = step.done; return step; }, e: function e(_e2) { didErr = true; err = _e2; }, f: function f() { try { if (!normalCompletion && it["return"] != null) it["return"](); } finally { if (didErr) throw err; } } }; }
+function _unsupportedIterableToArray(o, minLen) { if (!o) return; if (typeof o === "string") return _arrayLikeToArray(o, minLen); var n = Object.prototype.toString.call(o).slice(8, -1); if (n === "Object" && o.constructor) n = o.constructor.name; if (n === "Map" || n === "Set") return Array.from(o); if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return _arrayLikeToArray(o, minLen); }
+function _arrayLikeToArray(arr, len) { if (len == null || len > arr.length) len = arr.length; for (var i = 0, arr2 = new Array(len); i < len; i++) arr2[i] = arr[i]; return arr2; }
 function _typeof(o) { "@babel/helpers - typeof"; return _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function (o) { return typeof o; } : function (o) { return o && "function" == typeof Symbol && o.constructor === Symbol && o !== Symbol.prototype ? "symbol" : typeof o; }, _typeof(o); }
 function ownKeys(e, r) { var t = Object.keys(e); if (Object.getOwnPropertySymbols) { var o = Object.getOwnPropertySymbols(e); r && (o = o.filter(function (r) { return Object.getOwnPropertyDescriptor(e, r).enumerable; })), t.push.apply(t, o); } return t; }
 function _objectSpread(e) { for (var r = 1; r < arguments.length; r++) { var t = null != arguments[r] ? arguments[r] : {}; r % 2 ? ownKeys(Object(t), !0).forEach(function (r) { _defineProperty(e, r, t[r]); }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(e, Object.getOwnPropertyDescriptors(t)) : ownKeys(Object(t)).forEach(function (r) { Object.defineProperty(e, r, Object.getOwnPropertyDescriptor(t, r)); }); } return e; }
@@ -17016,6 +18064,15 @@ function _defineProperties(target, props) { for (var i = 0; i < props.length; i+
 function _createClass(Constructor, protoProps, staticProps) { if (protoProps) _defineProperties(Constructor.prototype, protoProps); if (staticProps) _defineProperties(Constructor, staticProps); Object.defineProperty(Constructor, "prototype", { writable: false }); return Constructor; }
 function _toPropertyKey(t) { var i = _toPrimitive(t, "string"); return "symbol" == _typeof(i) ? i : String(i); }
 function _toPrimitive(t, r) { if ("object" != _typeof(t) || !t) return t; var e = t[Symbol.toPrimitive]; if (void 0 !== e) { var i = e.call(t, r || "default"); if ("object" != _typeof(i)) return i; throw new TypeError("@@toPrimitive must return a primitive value."); } return ("string" === r ? String : Number)(t); }
+function _classPrivateMethodInitSpec(obj, privateSet) { _checkPrivateRedeclaration(obj, privateSet); privateSet.add(obj); }
+function _classPrivateFieldInitSpec(obj, privateMap, value) { _checkPrivateRedeclaration(obj, privateMap); privateMap.set(obj, value); }
+function _checkPrivateRedeclaration(obj, privateCollection) { if (privateCollection.has(obj)) { throw new TypeError("Cannot initialize the same private elements twice on an object"); } }
+function _classPrivateFieldGet(receiver, privateMap) { var descriptor = _classExtractFieldDescriptor(receiver, privateMap, "get"); return _classApplyDescriptorGet(receiver, descriptor); }
+function _classApplyDescriptorGet(receiver, descriptor) { if (descriptor.get) { return descriptor.get.call(receiver); } return descriptor.value; }
+function _classPrivateMethodGet(receiver, privateSet, fn) { if (!privateSet.has(receiver)) { throw new TypeError("attempted to get private field on non-instance"); } return fn; }
+function _classPrivateFieldSet(receiver, privateMap, value) { var descriptor = _classExtractFieldDescriptor(receiver, privateMap, "set"); _classApplyDescriptorSet(receiver, descriptor, value); return value; }
+function _classExtractFieldDescriptor(receiver, privateMap, action) { if (!privateMap.has(receiver)) { throw new TypeError("attempted to " + action + " private field on non-instance"); } return privateMap.get(receiver); }
+function _classApplyDescriptorSet(receiver, descriptor, value) { if (descriptor.set) { descriptor.set.call(receiver, value); } else { if (!descriptor.writable) { throw new TypeError("attempted to set read only private field"); } descriptor.value = value; } }
 
 
 
@@ -17035,91 +18092,170 @@ function _toPrimitive(t, r) { if ("object" != _typeof(t) || !t) return t; var e 
 
 
 
+
+
+
+var _menu = /*#__PURE__*/new WeakMap();
+var _layers = /*#__PURE__*/new WeakMap();
+var _settings = /*#__PURE__*/new WeakMap();
+var _initialSettings = /*#__PURE__*/new WeakMap();
+var _componentSettings = /*#__PURE__*/new WeakMap();
+var _presets = /*#__PURE__*/new WeakMap();
+var _data = /*#__PURE__*/new WeakMap();
+var _columns = /*#__PURE__*/new WeakMap();
+var _getNestedChanges = /*#__PURE__*/new WeakSet();
+var _settingsJSON = /*#__PURE__*/new WeakSet();
+var _elementInputCheck = /*#__PURE__*/new WeakSet();
+var _elementInputSwitch = /*#__PURE__*/new WeakSet();
+var _elementInputText = /*#__PURE__*/new WeakSet();
+var _elementInputColor = /*#__PURE__*/new WeakSet();
+var _elementInputRange = /*#__PURE__*/new WeakSet();
+var _elementInputSelect = /*#__PURE__*/new WeakSet();
+var _elementInputRadio = /*#__PURE__*/new WeakSet();
+var _elementInputScales = /*#__PURE__*/new WeakSet();
+var _elementHelp = /*#__PURE__*/new WeakSet();
 var CalendarHeatmap = /*#__PURE__*/function () {
   function CalendarHeatmap(width, height) {
     _classCallCheck(this, CalendarHeatmap);
+    _classPrivateMethodInitSpec(this, _elementHelp);
+    _classPrivateMethodInitSpec(this, _elementInputScales);
+    _classPrivateMethodInitSpec(this, _elementInputRadio);
+    _classPrivateMethodInitSpec(this, _elementInputSelect);
+    _classPrivateMethodInitSpec(this, _elementInputRange);
+    _classPrivateMethodInitSpec(this, _elementInputColor);
+    _classPrivateMethodInitSpec(this, _elementInputText);
+    _classPrivateMethodInitSpec(this, _elementInputSwitch);
+    _classPrivateMethodInitSpec(this, _elementInputCheck);
+    _classPrivateMethodInitSpec(this, _settingsJSON);
+    _classPrivateMethodInitSpec(this, _getNestedChanges);
+    _classPrivateFieldInitSpec(this, _menu, {
+      writable: true,
+      value: void 0
+    });
+    _classPrivateFieldInitSpec(this, _layers, {
+      writable: true,
+      value: void 0
+    });
+    _classPrivateFieldInitSpec(this, _settings, {
+      writable: true,
+      value: void 0
+    });
+    _classPrivateFieldInitSpec(this, _initialSettings, {
+      writable: true,
+      value: void 0
+    });
+    _classPrivateFieldInitSpec(this, _componentSettings, {
+      writable: true,
+      value: void 0
+    });
+    _classPrivateFieldInitSpec(this, _presets, {
+      writable: true,
+      value: void 0
+    });
+    _classPrivateFieldInitSpec(this, _data, {
+      writable: true,
+      value: void 0
+    });
+    _classPrivateFieldInitSpec(this, _columns, {
+      writable: true,
+      value: void 0
+    });
     this.width = width || 1400;
     this.height = height || 400;
     this.padding = {
       x: 20,
       y: 20
     };
-    this.menu = _constants_settings__WEBPACK_IMPORTED_MODULE_4__.menu || {};
-    this.layers = _constants_settings__WEBPACK_IMPORTED_MODULE_4__.layers || [];
-    this.settings = lodash_cloneDeep__WEBPACK_IMPORTED_MODULE_2___default()(_constants_settings__WEBPACK_IMPORTED_MODULE_4__["default"]) || [];
-    this.settingsInitial = lodash_cloneDeep__WEBPACK_IMPORTED_MODULE_2___default()(_constants_settings__WEBPACK_IMPORTED_MODULE_4__["default"]);
-    this.presets = _constants_presets__WEBPACK_IMPORTED_MODULE_5__["default"];
-    this.data = [];
+    _classPrivateFieldSet(this, _data, []);
+    _classPrivateFieldSet(this, _columns, []);
+    _classPrivateFieldSet(this, _componentSettings, lodash_cloneDeep__WEBPACK_IMPORTED_MODULE_0___default()(_constants_settings__WEBPACK_IMPORTED_MODULE_5__["default"]));
+    _classPrivateFieldSet(this, _initialSettings, _classPrivateMethodGet(this, _settingsJSON, _settingsJSON2).call(this));
+    _classPrivateFieldSet(this, _settings, _classPrivateFieldGet(this, _initialSettings));
+    _classPrivateFieldSet(this, _menu, _constants_settings__WEBPACK_IMPORTED_MODULE_5__.menu || {});
+    _classPrivateFieldSet(this, _layers, _constants_settings__WEBPACK_IMPORTED_MODULE_5__.layers || []);
+    _classPrivateFieldSet(this, _presets, _constants_presets__WEBPACK_IMPORTED_MODULE_6__["default"]);
   }
   _createClass(CalendarHeatmap, [{
     key: "build",
     value: function build() {
-      var _this = this;
+      var _this$settings;
       // Init the SVG
-      var draw = (0,_svgdotjs_svg_js__WEBPACK_IMPORTED_MODULE_17__.SVG)().size(this.width, this.height);
+      var draw = (0,_svgdotjs_svg_js__WEBPACK_IMPORTED_MODULE_19__.SVG)().size(this.width, this.height);
 
       // Set viewbox
       draw.viewbox("0 0 ".concat(this.width, " ").concat(this.height));
       var xoffset = this.padding.x;
       var yoffset = this.padding.y;
+
+      // Set up defs for darkmode
+      if ((_this$settings = this.settings) !== null && _this$settings !== void 0 && (_this$settings = _this$settings.darkmode) !== null && _this$settings !== void 0 && _this$settings.show) {
+        var defs = draw.defs();
+        var style = [];
+        for (var id in this.settings) {
+          var _this$settings$id, _this$settings$id2, _this$settings$id3;
+          if ((_this$settings$id = this.settings[id]) !== null && _this$settings$id !== void 0 && _this$settings$id.fontColor) style.push(" .".concat(id, " { fill: ").concat((0,_helpers_generateDarkColor__WEBPACK_IMPORTED_MODULE_21__["default"])(this.settings[id].fontColor), " !important;}"));
+          if ((_this$settings$id2 = this.settings[id]) !== null && _this$settings$id2 !== void 0 && _this$settings$id2.tileFuture) style.push(" .future { fill: ".concat((0,_helpers_generateDarkColor__WEBPACK_IMPORTED_MODULE_21__["default"])((_this$settings$id3 = this.settings[id]) === null || _this$settings$id3 === void 0 ? void 0 : _this$settings$id3.tileColor), " !important;}"));
+        }
+        var styleContent = '@media (prefers-color-scheme: dark) {\n';
+        styleContent += style.join('\n');
+        styleContent += '\n}';
+        defs.element('style').words(styleContent);
+      }
       var layout = {};
 
       // Apply options
-      var _loop = function _loop(i) {
-          var key = _this.settings.findIndex(function (itm) {
-            return itm.id == _this.layers[i];
-          });
-          if (_this.settings[key] && _this.settings[key].show) {
-            options = _this.parseOptions(_this.settings[key].options);
-            options.x = xoffset;
-            options.y = yoffset;
-            switch (_this.settings[key].id) {
-              case 'title':
-                yoffset += (0,_components_title__WEBPACK_IMPORTED_MODULE_6__["default"])(draw, _objectSpread({}, options)).bbox().height;
-                break;
-              case 'subtitle':
-                yoffset += (0,_components_subtitle__WEBPACK_IMPORTED_MODULE_7__["default"])(draw, _objectSpread({}, options)).bbox().height;
-                break;
-              case 'scale':
-                layout.scale = (0,_components_scale__WEBPACK_IMPORTED_MODULE_8__["default"])(draw, _objectSpread({}, options));
-                break;
-              case 'legend':
-                layout.legend = (0,_components_legend__WEBPACK_IMPORTED_MODULE_9__["default"])(draw, _objectSpread({}, options));
-                break;
-              case 'transform':
-                layout.transform = (0,_components_transform__WEBPACK_IMPORTED_MODULE_10__["default"])(draw, _objectSpread({}, options));
-                break;
-              case 'tooltip':
-                layout.tooltip = (0,_components_tooltip__WEBPACK_IMPORTED_MODULE_11__["default"])(draw, _objectSpread({}, options));
-                break;
-              case 'hover':
-                layout.hover = (0,_components_hover__WEBPACK_IMPORTED_MODULE_12__["default"])(draw, _objectSpread({}, options));
-                break;
-              case 'calendar-month':
-                layout.calendarMonthLabels = (0,_components_calendar_month__WEBPACK_IMPORTED_MODULE_14__["default"])(draw, _objectSpread({}, options));
-                break;
-              case 'calendar-week':
-                layout.calendarWeekLabels = (0,_components_calendar_week__WEBPACK_IMPORTED_MODULE_15__["default"])(draw, _objectSpread({}, options));
-                break;
-              case 'data-input':
-                layout.dataInput = (0,_components_data__WEBPACK_IMPORTED_MODULE_16__["default"])(draw, _objectSpread({}, options));
-                break;
-              case 'i18n':
-                layout.i18n = (0,_components_i18n__WEBPACK_IMPORTED_MODULE_18__["default"])(_objectSpread({}, options));
-                break;
-              case 'calendar':
-                // Gap between titles and calendar
-                options.y += _this.padding.y;
-                (0,_components_calendar__WEBPACK_IMPORTED_MODULE_13__["default"])(draw, _objectSpread(_objectSpread(_objectSpread({}, options), layout), {}, {
-                  data: _this.data
-                }));
-                break;
-            }
+      for (var i in _classPrivateFieldGet(this, _layers)) {
+        var key = _classPrivateFieldGet(this, _layers)[i];
+        if (this.settings[key] && this.settings[key].show || key == 'calendar') {
+          var options = _objectSpread({}, this.settings[key]); // Shallow copy to prevent offsets to seep into settings
+          options.x = xoffset;
+          options.y = yoffset;
+          switch (key) {
+            case 'title':
+              yoffset += (0,_components_title__WEBPACK_IMPORTED_MODULE_7__["default"])(draw, _objectSpread({}, options)).bbox().height;
+              break;
+            case 'subtitle':
+              yoffset += (0,_components_subtitle__WEBPACK_IMPORTED_MODULE_8__["default"])(draw, _objectSpread({}, options)).bbox().height;
+              break;
+            case 'scale':
+              layout.scale = (0,_components_scale__WEBPACK_IMPORTED_MODULE_9__["default"])(draw, _objectSpread({}, options));
+              break;
+            case 'legend':
+              layout.legend = (0,_components_legend__WEBPACK_IMPORTED_MODULE_10__["default"])(draw, _objectSpread({}, options));
+              break;
+            case 'transform':
+              layout.transform = (0,_components_transform__WEBPACK_IMPORTED_MODULE_11__["default"])(draw, _objectSpread({}, options));
+              break;
+            case 'tooltip':
+              layout.tooltip = (0,_components_tooltip__WEBPACK_IMPORTED_MODULE_12__["default"])(draw, _objectSpread({}, options));
+              break;
+            case 'hover':
+              layout.hover = (0,_components_hover__WEBPACK_IMPORTED_MODULE_14__["default"])(draw, _objectSpread({}, options));
+              break;
+            case 'darkmode':
+              layout.darkmode = (0,_components_darkmode__WEBPACK_IMPORTED_MODULE_13__["default"])(draw, _objectSpread({}, options));
+              break;
+            case 'calendar-month':
+              layout.calendarMonthLabels = (0,_components_calendar_month__WEBPACK_IMPORTED_MODULE_16__["default"])(draw, _objectSpread({}, options));
+              break;
+            case 'calendar-week':
+              layout.calendarWeekLabels = (0,_components_calendar_week__WEBPACK_IMPORTED_MODULE_17__["default"])(draw, _objectSpread({}, options));
+              break;
+            case 'data-input':
+              layout.dataInput = (0,_components_data__WEBPACK_IMPORTED_MODULE_18__["default"])(draw, _objectSpread({}, options));
+              break;
+            case 'i18n':
+              layout.i18n = (0,_components_i18n__WEBPACK_IMPORTED_MODULE_20__["default"])(_objectSpread({}, options));
+              break;
+            case 'calendar':
+              // Gap between titles and calendar
+              options.y += this.padding.y;
+              (0,_components_calendar__WEBPACK_IMPORTED_MODULE_15__["default"])(draw, _objectSpread(_objectSpread(_objectSpread({}, options), layout), {}, {
+                data: this.data
+              }));
+              break;
           }
-        },
-        options;
-      for (var i in this.layers) {
-        _loop(i);
+        }
       }
 
       // Final SVG
@@ -17128,122 +18264,121 @@ var CalendarHeatmap = /*#__PURE__*/function () {
   }, {
     key: "importData",
     value: function importData(data) {
-      var obj = [];
+      var arr = [];
       // try to parse JSON
-      try {
-        obj = JSON.parse(data);
-        if (!Array.isArray(obj)) obj = [];
-      } catch (e) {
-        data = papaparse__WEBPACK_IMPORTED_MODULE_3___default().parse(data, {
-          header: true,
-          dynamicTyping: true,
-          skipEmptyLines: true
-        });
-        if (data.errors.length == 0) obj = data.data;else {
-          console.log(data.errors);
+      if (_typeof(data) === 'object' && Array.isArray(data)) {
+        arr = data;
+      } else {
+        try {
+          arr = JSON.parse(data);
+          if (!Array.isArray(arr)) arr = [];
+        } catch (e) {
+          data = papaparse__WEBPACK_IMPORTED_MODULE_4___default().parse(data, {
+            header: true,
+            dynamicTyping: true,
+            skipEmptyLines: true
+          });
+          if (data.errors.length == 0) arr = data.data;else {
+            console.log(data.errors);
+          }
         }
       }
-      this.parseData(obj);
-      return obj.length == 0;
-    }
-  }, {
-    key: "parseData",
-    value: function parseData() {
-      var data = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : [];
-      this.settings.map(function (e) {
-        if (e.id == "data-input" && data[0]) {
-          var keys = Object.keys(data[0]);
-          keys = keys.filter(function (e) {
+      this.data = arr;
+      if (arr.length > 0) {
+        if (this.settings['data-input'] && _typeof(this.data[0]) === 'object' && !Array.isArray(this.data[0])) {
+          this.headers = Object.keys(this.data[0]).filter(function (e) {
             return e !== '';
           });
-          e.options[0].options = keys;
-          e.options[1].options = keys;
+          // generate some presets
+          this.settings['data-input'] = {
+            dateColumn: this.headers[0],
+            valueColumn: this.headers[1]
+          };
+          this.settings['data-input'].show = true;
         }
-        return e;
-      });
-      this.data = data;
-    }
-  }, {
-    key: "parseOptions",
-    value: function parseOptions(obj) {
-      if (obj === undefined) return {};
-      var options = {};
-      obj.forEach(function (itm) {
-        options[itm.name] = itm.value;
-        return options;
-      });
-      return options;
+      }
+      return arr.length > 0;
     }
   }, {
     key: "reset",
     value: function reset() {
-      return this.settings = lodash_cloneDeep__WEBPACK_IMPORTED_MODULE_2___default()(this.settingsInitial);
+      _classPrivateFieldSet(this, _columns, []);
+      _classPrivateFieldSet(this, _data, []);
+      _classPrivateFieldSet(this, _settings, lodash_cloneDeep__WEBPACK_IMPORTED_MODULE_0___default()(_classPrivateFieldGet(this, _initialSettings)));
     }
   }, {
-    key: "update",
-    value: function update(obj) {
-      var current = lodash_cloneDeep__WEBPACK_IMPORTED_MODULE_2___default()(this.settings);
-      if (!Array.isArray(obj)) {
-        var _loop2 = function _loop2() {
-          // Parse Value
-          var value = obj[key];
-          if (value == 'true') value = true;
-          if (value == 'false') value = false;
-
-          // Modify Key
-          var modkey = key.split('.');
-          var idx = current.findIndex(function (itm) {
-            return itm.id == modkey[0];
-          });
-          modkey = modkey.slice(1);
-          if (modkey[0] !== undefined && modkey[0].match(/^options\[/)) {
-            modkey = modkey.slice(0, -1).join('.') + '.value';
-          } else {
-            modkey = modkey.join('.');
-          }
-          lodash_set__WEBPACK_IMPORTED_MODULE_0___default()(current[idx], modkey, value);
-        };
-        for (var key in obj) {
-          _loop2();
-        }
-      }
-      this.settings = current;
+    key: "resetSettings",
+    value: function resetSettings() {
+      _classPrivateFieldSet(this, _settings, lodash_cloneDeep__WEBPACK_IMPORTED_MODULE_0___default()(_classPrivateFieldGet(this, _initialSettings)));
+    }
+  }, {
+    key: "settingsSave",
+    get: function get() {
+      var current = this.settings;
+      var initial = _classPrivateFieldGet(this, _initialSettings);
+      return _classPrivateMethodGet(this, _getNestedChanges, _getNestedChanges2).call(this, current, initial);
+    }
+  }, {
+    key: "settings",
+    get: function get() {
+      return _classPrivateFieldGet(this, _settings);
+    },
+    set: function set(obj) {
+      _classPrivateFieldSet(this, _settings, lodash_merge__WEBPACK_IMPORTED_MODULE_3___default()(_classPrivateFieldGet(this, _settings), obj)); // {...this.#settings, ...obj};
     }
   }, {
     key: "settingsHTML",
     value: function settingsHTML() {
-      var _this2 = this;
+      var _this = this;
       var elCount = 0;
       var html = '<form id="settingsform">';
-      var _loop3 = function _loop3(header) {
+      var _loop = function _loop(header) {
         var uid = "ps-" + crypto.randomUUID();
         var accordionid = "ps-" + crypto.randomUUID();
         html += "<div style=\"cursor:pointer;\" class=\"small fw-bold mt-3 mb-2 d-flex justify-content-between align-items-center\" data-bs-toggle=\"collapse\" data-bs-target=\"#".concat(uid, "\" aria-controls=\"Toggle ").concat(header, "\">\n        ").concat(header, "\n        <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" fill=\"currentColor\" class=\"bi bi-chevron-expand me-1\" viewBox=\"0 0 16 16\">\n          <path fill-rule=\"evenodd\" d=\"M3.646 9.146a.5.5 0 0 1 .708 0L8 12.793l3.646-3.647a.5.5 0 0 1 .708.708l-4 4a.5.5 0 0 1-.708 0l-4-4a.5.5 0 0 1 0-.708zm0-2.292a.5.5 0 0 0 .708 0L8 3.207l3.646 3.647a.5.5 0 0 0 .708-.708l-4-4a.5.5 0 0 0-.708 0l-4 4a.5.5 0 0 0 0 .708z\"/>\n        </svg>\n      </div>");
         html += "<div class=\"collapse ".concat(!elCount ? "show" : "", "\" id=\"").concat(uid, "\" data-bs-parent=\"#settingsform\">");
         html += "<div class=\"accordion\" id=\"".concat(accordionid, "\">");
-        var _loop4 = function _loop4(i) {
-            var idx = _this2.settings.findIndex(function (itm) {
-              return itm.id == _this2.menu[header][i];
+        var _loop2 = function _loop2(i) {
+            var idx = _classPrivateFieldGet(_this, _componentSettings).findIndex(function (itm) {
+              return itm.id == _classPrivateFieldGet(_this, _menu)[header][i];
             });
             if (idx == -1) return 0; // continue
-            if (_this2.settings[idx].show === undefined && _this2.settings[idx].options === undefined) return 0; // continue
-            html += "<div class=\"accordion-item\">\n          <h2 class=\"accordion-header\" id=\"heading".concat(idx, "\">\n            <button class=\"accordion-button collapsed ps-5\" type=\"button\" data-bs-toggle=\"collapse\" data-bs-target=\"#collapse").concat(idx, "\" aria-expanded=\"").concat(elCount === 0 ? 'true' : 'false', "\" aria-controls=\"collapse").concat(idx, "\">\n            ").concat(_this2.settings[idx].headerTitle, "\n            </button>\n            ").concat(_this2.elementInputSwitch([_this2.settings[idx].id, 'show'].join('.'), {
-              value: _this2.settings[idx].show,
+            if (_classPrivateFieldGet(_this, _componentSettings)[idx].show === undefined && _classPrivateFieldGet(_this, _componentSettings)[idx].options === undefined) return 0; // continue
+            html += "<div class=\"accordion-item\">\n          <h2 class=\"accordion-header\" id=\"heading".concat(idx, "\">\n            <button class=\"accordion-button collapsed ps-5\" type=\"button\" data-bs-toggle=\"collapse\" data-bs-target=\"#collapse").concat(idx, "\" aria-expanded=\"").concat(elCount === 0 ? 'true' : 'false', "\" aria-controls=\"collapse").concat(idx, "\">\n            ").concat(_classPrivateFieldGet(_this, _componentSettings)[idx].headerTitle, "\n            </button>\n            ").concat(_classPrivateMethodGet(_this, _elementInputSwitch, _elementInputSwitch2).call(_this, [_classPrivateFieldGet(_this, _componentSettings)[idx].id, 'show'].join('.'), {
+              value: _classPrivateFieldGet(_this, _componentSettings)[idx].show,
               label: '',
-              disabled: _this2.settings[idx].disabled || false
+              disabled: _classPrivateFieldGet(_this, _componentSettings)[idx].disabled || false
             }), "\n          </h2>\n          <div id=\"collapse").concat(idx, "\" class=\"accordion-collapse collapse\" aria-labelledby=\"heading").concat(idx, "\" data-bs-parent=\"#").concat(accordionid, "\">\n            <div class=\"accordion-body row\">");
-            if (_this2.settings[idx].options !== undefined && _this2.settings[idx].options.length > 0) {
-              for (var _i in _this2.settings[idx].options) {
-                var option = _this2.settings[idx].options[_i];
-                var name = [_this2.settings[idx].id, "options[".concat(_i, "]"), option.name].join('.');
-                if (option.type == 'color') html += _this2.elementInputColor(name, _objectSpread({}, option));
-                if (option.type == 'text') html += _this2.elementInputText(name, _objectSpread({}, option));
-                if (option.type == 'check') html += _this2.elementInputCheck(name, _objectSpread({}, option));
-                if (option.type == 'range') html += _this2.elementInputRange(name, _objectSpread({}, option));
-                if (option.type == 'select') html += _this2.elementInputSelect(name, _objectSpread({}, option));
-                if (option.type == 'scales') html += _this2.elementInputScales(name, _objectSpread({}, option));
-                if (option.type == 'help') html += _this2.elementHelp(_objectSpread({}, option));
-                if (option.type == 'separator') html += "<div class=\"separator\"><hr></div>";
+            if (_classPrivateFieldGet(_this, _componentSettings)[idx].options !== undefined && _classPrivateFieldGet(_this, _componentSettings)[idx].options.length > 0) {
+              for (var _i in _classPrivateFieldGet(_this, _componentSettings)[idx].options) {
+                var option = _classPrivateFieldGet(_this, _componentSettings)[idx].options[_i];
+                var name = [_classPrivateFieldGet(_this, _componentSettings)[idx].id, option.name].join('.');
+                switch (option.type) {
+                  case 'color':
+                    html += _classPrivateMethodGet(_this, _elementInputColor, _elementInputColor2).call(_this, name, _objectSpread({}, option));
+                    break;
+                  case 'text':
+                    html += _classPrivateMethodGet(_this, _elementInputText, _elementInputText2).call(_this, name, _objectSpread({}, option));
+                    break;
+                  case 'check':
+                    html += _classPrivateMethodGet(_this, _elementInputCheck, _elementInputCheck2).call(_this, name, _objectSpread({}, option));
+                    break;
+                  case 'range':
+                    html += _classPrivateMethodGet(_this, _elementInputRange, _elementInputRange2).call(_this, name, _objectSpread({}, option));
+                    break;
+                  case 'select':
+                    html += _classPrivateMethodGet(_this, _elementInputSelect, _elementInputSelect2).call(_this, name, _objectSpread({}, option));
+                    break;
+                  case 'scales':
+                    html += _classPrivateMethodGet(_this, _elementInputScales, _elementInputScales2).call(_this, name, _objectSpread({}, option));
+                    break;
+                  case 'help':
+                    html += _classPrivateMethodGet(_this, _elementHelp, _elementHelp2).call(_this, _objectSpread({}, option));
+                    break;
+                  case 'separator':
+                    html += "<div class=\"separator\"><hr></div>";
+                    break;
+                }
               }
             } else {
               html += "<div class=\"form-text\">No settings available</div>";
@@ -17252,24 +18387,45 @@ var CalendarHeatmap = /*#__PURE__*/function () {
             elCount++;
           },
           _ret;
-        for (var i in _this2.menu[header]) {
-          _ret = _loop4(i);
+        for (var i in _classPrivateFieldGet(_this, _menu)[header]) {
+          _ret = _loop2(i);
           if (_ret === 0) continue;
         }
         html += "</div>";
         html += "</div>";
       };
-      for (var header in this.menu) {
-        _loop3(header);
+      for (var header in _classPrivateFieldGet(this, _menu)) {
+        _loop(header);
       }
       html += '</form>';
       return html;
     }
   }, {
-    key: "getPreset",
-    value: function getPreset(id) {
-      var preset = lodash_get__WEBPACK_IMPORTED_MODULE_1___default()(this.presets, id, {});
-      return preset.settings || {};
+    key: "applyPreset",
+    value: function applyPreset(id) {
+      var _this$presets$id;
+      this.settings = ((_this$presets$id = this.presets[id]) === null || _this$presets$id === void 0 ? void 0 : _this$presets$id.settings) || {};
+    }
+  }, {
+    key: "presets",
+    get: function get() {
+      return _classPrivateFieldGet(this, _presets);
+    }
+  }, {
+    key: "data",
+    get: function get() {
+      return _classPrivateFieldGet(this, _data);
+    },
+    set: function set(arr) {
+      _classPrivateFieldSet(this, _data, arr);
+    }
+  }, {
+    key: "headers",
+    get: function get() {
+      return _classPrivateFieldGet(this, _columns);
+    },
+    set: function set(arr) {
+      _classPrivateFieldSet(this, _columns, arr);
     }
   }, {
     key: "presetsHTML",
@@ -17288,168 +18444,192 @@ var CalendarHeatmap = /*#__PURE__*/function () {
       html += "</select>";
       return html;
     }
-  }, {
-    key: "elementInputCheck",
-    value: function elementInputCheck() {
-      var name = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 'check';
-      var _ref = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {},
-        _ref$value = _ref.value,
-        value = _ref$value === void 0 ? true : _ref$value,
-        _ref$label = _ref.label,
-        label = _ref$label === void 0 ? 'label' : _ref$label,
-        _ref$className = _ref.className,
-        className = _ref$className === void 0 ? '' : _ref$className,
-        _ref$disabled = _ref.disabled,
-        disabled = _ref$disabled === void 0 ? false : _ref$disabled;
-      var id = "ch-" + crypto.randomUUID();
-      return "<div class=\"form-check mb-1\">\n      <input class=\"form-check-input\" name=\"".concat(name, "\" type=\"checkbox\" value=\"", true, "\" id=\"").concat(id, "\" ").concat(value ? 'checked' : '', ">\n      <label class=\"form-check-label\" for=\"").concat(id, "\">").concat(label, "</label>\n    </div>");
-    }
-  }, {
-    key: "elementInputSwitch",
-    value: function elementInputSwitch() {
-      var name = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 'switch';
-      var _ref2 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {},
-        _ref2$value = _ref2.value,
-        value = _ref2$value === void 0 ? true : _ref2$value,
-        _ref2$label = _ref2.label,
-        label = _ref2$label === void 0 ? 'label' : _ref2$label,
-        _ref2$className = _ref2.className,
-        className = _ref2$className === void 0 ? '' : _ref2$className,
-        _ref2$disabled = _ref2.disabled,
-        disabled = _ref2$disabled === void 0 ? false : _ref2$disabled;
-      var id = "ch-" + crypto.randomUUID();
-      return "<div class=\"form-check form-switch fs-6\" style=\"position:relative; margin:-2.1rem .5rem .6rem .5rem; z-index:10; width:2em;\">\n    <input class=\"form-check-input\" type=\"checkbox\" role=\"switch\" name=\"".concat(name, "\" value=\"", true, "\" id=\"").concat(id, "\" ").concat(value ? 'checked' : '', " ").concat(disabled ? 'disabled' : '', ">\n    <label class=\"form-check-label\" for=\"").concat(id, "\">").concat(label, "</label>\n  </div>");
-    }
-  }, {
-    key: "elementInputText",
-    value: function elementInputText() {
-      var name = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 'text';
-      var _ref3 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {},
-        _ref3$value = _ref3.value,
-        value = _ref3$value === void 0 ? 'Text' : _ref3$value,
-        _ref3$label = _ref3.label,
-        label = _ref3$label === void 0 ? 'label' : _ref3$label,
-        _ref3$icon = _ref3.icon,
-        icon = _ref3$icon === void 0 ? '' : _ref3$icon,
-        _ref3$className = _ref3.className,
-        className = _ref3$className === void 0 ? '' : _ref3$className,
-        _ref3$disabled = _ref3.disabled,
-        disabled = _ref3$disabled === void 0 ? false : _ref3$disabled;
-      var id = "ch-" + crypto.randomUUID();
-      return "<div class=\"mb-1 ".concat(className, "\">\n      <label for=\"").concat(id, "\" class=\"form-label\">").concat(label, "</label>").concat(icon, "\n      <input type=\"text\" class=\"form-control form-control-sm\" name=\"").concat(name, "\" id=\"").concat(id, "\" placeholder=\"").concat(value, "\" value=\"").concat(value, "\">\n    </div>");
-    }
-  }, {
-    key: "elementInputColor",
-    value: function elementInputColor() {
-      var name = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 'color';
-      var _ref4 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {},
-        _ref4$value = _ref4.value,
-        value = _ref4$value === void 0 ? '#000000' : _ref4$value,
-        _ref4$label = _ref4.label,
-        label = _ref4$label === void 0 ? 'label' : _ref4$label,
-        _ref4$className = _ref4.className,
-        className = _ref4$className === void 0 ? '' : _ref4$className,
-        _ref4$disabled = _ref4.disabled,
-        disabled = _ref4$disabled === void 0 ? false : _ref4$disabled;
-      var id = "ch-" + crypto.randomUUID();
-      return "<div class=\"d-flex mb-1 ".concat(className, "\">\n      <input type=\"color\" class=\"form-control form-control-color\" name=\"").concat(name, "\" id=\"").concat(id, "\" value=\"").concat(value, "\" title=\"Choose ").concat(label, " color\">\n      <label for=\"").concat(id, "\" class=\"col-sm-9 col-form-label\">").concat(label, "</label>\n    </div>");
-    }
-  }, {
-    key: "elementInputRange",
-    value: function elementInputRange() {
-      var name = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 'range';
-      var _ref5 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {},
-        _ref5$value = _ref5.value,
-        value = _ref5$value === void 0 ? -1 : _ref5$value,
-        _ref5$label = _ref5.label,
-        label = _ref5$label === void 0 ? 'label' : _ref5$label,
-        _ref5$icon = _ref5.icon,
-        icon = _ref5$icon === void 0 ? '' : _ref5$icon,
-        _ref5$step = _ref5.step,
-        step = _ref5$step === void 0 ? 1 : _ref5$step,
-        _ref5$min = _ref5.min,
-        min = _ref5$min === void 0 ? 0 : _ref5$min,
-        _ref5$max = _ref5.max,
-        max = _ref5$max === void 0 ? 1 : _ref5$max,
-        _ref5$className = _ref5.className,
-        className = _ref5$className === void 0 ? '' : _ref5$className,
-        _ref5$disabled = _ref5.disabled,
-        disabled = _ref5$disabled === void 0 ? false : _ref5$disabled;
-      var id = "ch-" + crypto.randomUUID();
-      return "<div class=\"mt-1\">\n    <label for=\"".concat(id, "\" class=\"form-label\" style=\"margin-bottom:-1.5rem\">\n      ").concat(label, " (").concat(min, "-").concat(max, ", default: ").concat(value, ")\n    </label>").concat(icon, "\n    <input type=\"range\" class=\"form-range\" name=\"").concat(name, "\" id=\"").concat(id, "\" value=\"").concat(value, "\" min=\"").concat(min, "\" max=\"").concat(max, "\" step=\"").concat(step, "\">      \n    </div>");
-    }
-  }, {
-    key: "elementInputSelect",
-    value: function elementInputSelect() {
-      var name = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 'select';
-      var _ref6 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {},
-        _ref6$value = _ref6.value,
-        value = _ref6$value === void 0 ? '' : _ref6$value,
-        _ref6$label = _ref6.label,
-        label = _ref6$label === void 0 ? 'label' : _ref6$label,
-        _ref6$icon = _ref6.icon,
-        icon = _ref6$icon === void 0 ? '' : _ref6$icon,
-        _ref6$options = _ref6.options,
-        options = _ref6$options === void 0 ? [] : _ref6$options,
-        _ref6$className = _ref6.className,
-        className = _ref6$className === void 0 ? '' : _ref6$className,
-        _ref6$disabled = _ref6.disabled,
-        disabled = _ref6$disabled === void 0 ? false : _ref6$disabled;
-      var id = "ch-" + crypto.randomUUID();
-      options = options.map(function (e) {
-        return e.name ? "<option value=\"".concat(e.value, "\"").concat(e.value == value ? "selected" : "", ">").concat(e.name, "</option>") : "<option value=\"".concat(e, "\"").concat(e == value ? "selected" : "", ">").concat(e, "</option>");
-      });
-      return "<div class=\"mb-2 ".concat(className, "\">\n      <label for=\"").concat(id, "\" class=\"form-label\">").concat(label, "</label>").concat(icon, "\n      <select class=\"form-select form-select-sm\" name=\"").concat(name, "\" id=\"").concat(id, "\">").concat(options.join('\n'), "</select>\n    </div>");
-    }
-  }, {
-    key: "elementInputRadio",
-    value: function elementInputRadio() {
-      var name = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 'check';
-      var _ref7 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {},
-        _ref7$value = _ref7.value,
-        value = _ref7$value === void 0 ? '' : _ref7$value,
-        _ref7$label = _ref7.label,
-        label = _ref7$label === void 0 ? 'label' : _ref7$label,
-        _ref7$className = _ref7.className,
-        className = _ref7$className === void 0 ? '' : _ref7$className,
-        _ref7$disabled = _ref7.disabled,
-        disabled = _ref7$disabled === void 0 ? false : _ref7$disabled;
-      var id = "ch-" + crypto.randomUUID();
-      return "<div class=\"form-check mb-1\">\n      <input class=\"form-check-input\" name=\"".concat(name, "\" type=\"radio\" autocomplete=\"off\" value=\"", true, "\" id=\"").concat(id, "\" ").concat(value ? 'checked' : '', ">\n      <label class=\"form-check-label\" for=\"").concat(id, "\">").concat(label, "</label>\n    </div>");
-    }
-  }, {
-    key: "elementInputScales",
-    value: function elementInputScales() {
-      var name = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 'scales';
-      var _ref8 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {},
-        _ref8$value = _ref8.value,
-        value = _ref8$value === void 0 ? '' : _ref8$value,
-        _ref8$label = _ref8.label,
-        label = _ref8$label === void 0 ? 'label' : _ref8$label,
-        _ref8$options = _ref8.options,
-        options = _ref8$options === void 0 ? [] : _ref8$options,
-        _ref8$className = _ref8.className,
-        className = _ref8$className === void 0 ? '' : _ref8$className,
-        _ref8$disabled = _ref8.disabled,
-        disabled = _ref8$disabled === void 0 ? false : _ref8$disabled;
-      options = options.map(function (e) {
-        var id = "ch-" + crypto.randomUUID();
-        return "<div>\n        <input class=\"form-radio-scale d-none\" type=\"radio\" name=\"".concat(name, "\" value=\"").concat(e.name, "\" autocomplete=\"off\" id=\"").concat(id, "\" ").concat(e.name == value ? 'checked' : '', ">\n        <label class=\"form-check-label border\" for=\"").concat(id, "\" title=\"").concat(e.name, "\" style=\"background: linear-gradient( to bottom, ").concat(e.value.map(function (e, i) {
-          return "".concat(e, " ").concat(20 * i, "%, ").concat(e, " ").concat(20 * (i + 1), "%");
-        }).join(','), "); width:15px; height:75px;\"></label>\n        </div>");
-      });
-      return "<div class=\"mb-1 ".concat(className, "\">\n        <label class=\"form-check-label mb-1\">").concat(label, "</label>\n        <div class=\"p-1\" style=\"display:flex; flex-wrap: wrap; column-gap: 5px;\">\n          ").concat(options.join('\n'), "\n        </div>\n      </div>");
-    }
-  }, {
-    key: "elementHelp",
-    value: function elementHelp(options) {
-      var id = "ch-" + crypto.randomUUID();
-      if (options.display == 'inline') return "<span>".concat(options.content, "</span>");
-      if (options.display == 'block') return "<div id=\"".concat(id, "\" class=\"form-text\">\n        ").concat(options.content, "\n      </div>");
-    }
   }]);
   return CalendarHeatmap;
 }();
+function _getNestedChanges2(obj1, obj2) {
+  var changes = {};
+  for (var key in obj2) {
+    var val1 = obj1 === null || obj1 === void 0 ? void 0 : obj1[key];
+    var val2 = obj2[key];
+    if (lodash_isPlainObject__WEBPACK_IMPORTED_MODULE_2___default()(val1) && lodash_isPlainObject__WEBPACK_IMPORTED_MODULE_2___default()(val2)) {
+      // Recursively check nested objects
+      var nestedChanges = _classPrivateMethodGet(this, _getNestedChanges, _getNestedChanges2).call(this, val1, val2);
+      if (Object.keys(nestedChanges).length > 0) {
+        changes[key] = nestedChanges;
+      }
+    } else if (!lodash_isEqual__WEBPACK_IMPORTED_MODULE_1___default()(val1, val2)) {
+      changes[key] = val2;
+    }
+  }
+  return changes;
+}
+function _settingsJSON2() {
+  var s = {};
+  for (var i in _classPrivateFieldGet(this, _componentSettings)) {
+    s[_classPrivateFieldGet(this, _componentSettings)[i].id] = {};
+    for (var _i3 = 0, _Object$entries = Object.entries(_classPrivateFieldGet(this, _componentSettings)[i]); _i3 < _Object$entries.length; _i3++) {
+      var a = _Object$entries[_i3];
+      if (!['id', 'disabled', 'options', 'headerTitle'].includes(a[0])) s[_classPrivateFieldGet(this, _componentSettings)[i].id][a[0]] = a[1];
+      if (a[0] === 'options') {
+        var _iterator = _createForOfIteratorHelper(a[1]),
+          _step;
+        try {
+          for (_iterator.s(); !(_step = _iterator.n()).done;) {
+            var b = _step.value;
+            if (b.name) s[_classPrivateFieldGet(this, _componentSettings)[i].id][b.name] = b.value;
+          }
+        } catch (err) {
+          _iterator.e(err);
+        } finally {
+          _iterator.f();
+        }
+      }
+    }
+  }
+  return s;
+}
+function _elementInputCheck2() {
+  var name = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 'check';
+  var _ref = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {},
+    _ref$value = _ref.value,
+    value = _ref$value === void 0 ? true : _ref$value,
+    _ref$label = _ref.label,
+    label = _ref$label === void 0 ? 'label' : _ref$label,
+    _ref$className = _ref.className,
+    className = _ref$className === void 0 ? '' : _ref$className,
+    _ref$disabled = _ref.disabled,
+    disabled = _ref$disabled === void 0 ? false : _ref$disabled;
+  var id = "ch-" + crypto.randomUUID();
+  return "<div class=\"form-check mb-1\">\n      <input class=\"form-check-input\" name=\"".concat(name, "\" type=\"checkbox\" value=\"", true, "\" id=\"").concat(id, "\" ").concat(value ? 'checked' : '', ">\n      <label class=\"form-check-label\" for=\"").concat(id, "\">").concat(label, "</label>\n    </div>");
+}
+function _elementInputSwitch2() {
+  var name = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 'switch';
+  var _ref2 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {},
+    _ref2$value = _ref2.value,
+    value = _ref2$value === void 0 ? true : _ref2$value,
+    _ref2$label = _ref2.label,
+    label = _ref2$label === void 0 ? 'label' : _ref2$label,
+    _ref2$className = _ref2.className,
+    className = _ref2$className === void 0 ? '' : _ref2$className,
+    _ref2$disabled = _ref2.disabled,
+    disabled = _ref2$disabled === void 0 ? false : _ref2$disabled;
+  var id = "ch-" + crypto.randomUUID();
+  return "<div class=\"form-check form-switch fs-6\" style=\"position:relative; margin:-2.1rem .5rem .6rem .5rem; z-index:10; width:2em;\">\n    <input class=\"form-check-input\" type=\"checkbox\" role=\"switch\" name=\"".concat(name, "\" value=\"", true, "\" id=\"").concat(id, "\" ").concat(value ? 'checked' : '', " ").concat(disabled ? 'disabled' : '', " switch>\n    <label class=\"form-check-label\" for=\"").concat(id, "\">").concat(label, "</label>\n  </div>");
+}
+function _elementInputText2() {
+  var name = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 'text';
+  var _ref3 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {},
+    _ref3$value = _ref3.value,
+    value = _ref3$value === void 0 ? 'Text' : _ref3$value,
+    _ref3$label = _ref3.label,
+    label = _ref3$label === void 0 ? 'label' : _ref3$label,
+    _ref3$icon = _ref3.icon,
+    icon = _ref3$icon === void 0 ? '' : _ref3$icon,
+    _ref3$className = _ref3.className,
+    className = _ref3$className === void 0 ? '' : _ref3$className,
+    _ref3$disabled = _ref3.disabled,
+    disabled = _ref3$disabled === void 0 ? false : _ref3$disabled;
+  var id = "ch-" + crypto.randomUUID();
+  return "<div class=\"mb-1 ".concat(className, "\">\n      <label for=\"").concat(id, "\" class=\"form-label\">").concat(label, "</label>").concat(icon, "\n      <input type=\"text\" class=\"form-control form-control-sm\" name=\"").concat(name, "\" id=\"").concat(id, "\" placeholder=\"").concat(value, "\" value=\"").concat(value, "\">\n    </div>");
+}
+function _elementInputColor2() {
+  var name = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 'color';
+  var _ref4 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {},
+    _ref4$value = _ref4.value,
+    value = _ref4$value === void 0 ? '#000000' : _ref4$value,
+    _ref4$label = _ref4.label,
+    label = _ref4$label === void 0 ? 'label' : _ref4$label,
+    _ref4$className = _ref4.className,
+    className = _ref4$className === void 0 ? '' : _ref4$className,
+    _ref4$disabled = _ref4.disabled,
+    disabled = _ref4$disabled === void 0 ? false : _ref4$disabled;
+  var id = "ch-" + crypto.randomUUID();
+  return "<div class=\"d-flex mb-1 ".concat(className, "\">\n      <input type=\"color\" class=\"form-control form-control-color\" name=\"").concat(name, "\" id=\"").concat(id, "\" value=\"").concat(value, "\" title=\"Choose ").concat(label, " color\">\n      <label for=\"").concat(id, "\" class=\"col-sm-9 col-form-label\">").concat(label, "</label>\n    </div>");
+}
+function _elementInputRange2() {
+  var name = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 'range';
+  var _ref5 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {},
+    _ref5$value = _ref5.value,
+    value = _ref5$value === void 0 ? -1 : _ref5$value,
+    _ref5$label = _ref5.label,
+    label = _ref5$label === void 0 ? 'label' : _ref5$label,
+    _ref5$icon = _ref5.icon,
+    icon = _ref5$icon === void 0 ? '' : _ref5$icon,
+    _ref5$step = _ref5.step,
+    step = _ref5$step === void 0 ? 1 : _ref5$step,
+    _ref5$min = _ref5.min,
+    min = _ref5$min === void 0 ? 0 : _ref5$min,
+    _ref5$max = _ref5.max,
+    max = _ref5$max === void 0 ? 1 : _ref5$max,
+    _ref5$className = _ref5.className,
+    className = _ref5$className === void 0 ? '' : _ref5$className,
+    _ref5$disabled = _ref5.disabled,
+    disabled = _ref5$disabled === void 0 ? false : _ref5$disabled;
+  var id = "ch-" + crypto.randomUUID();
+  return "<div class=\"mt-1\">\n    <label for=\"".concat(id, "\" class=\"form-label\" style=\"margin-bottom:-1.5rem\">\n      ").concat(label, " (").concat(min, "-").concat(max, ", default: ").concat(value, ")\n    </label>").concat(icon, "\n    <input type=\"range\" class=\"form-range\" name=\"").concat(name, "\" id=\"").concat(id, "\" value=\"").concat(value, "\" min=\"").concat(min, "\" max=\"").concat(max, "\" step=\"").concat(step, "\">      \n    </div>");
+}
+function _elementInputSelect2() {
+  var name = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 'select';
+  var _ref6 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {},
+    _ref6$value = _ref6.value,
+    value = _ref6$value === void 0 ? '' : _ref6$value,
+    _ref6$label = _ref6.label,
+    label = _ref6$label === void 0 ? 'label' : _ref6$label,
+    _ref6$icon = _ref6.icon,
+    icon = _ref6$icon === void 0 ? '' : _ref6$icon,
+    _ref6$options = _ref6.options,
+    options = _ref6$options === void 0 ? [] : _ref6$options,
+    _ref6$className = _ref6.className,
+    className = _ref6$className === void 0 ? '' : _ref6$className,
+    _ref6$disabled = _ref6.disabled,
+    disabled = _ref6$disabled === void 0 ? false : _ref6$disabled;
+  var id = "ch-" + crypto.randomUUID();
+  options = options.map(function (e) {
+    return e.name ? "<option value=\"".concat(e.value, "\"").concat(e.value == value ? "selected" : "", ">").concat(e.name, "</option>") : "<option value=\"".concat(e, "\"").concat(e == value ? "selected" : "", ">").concat(e, "</option>");
+  });
+  return "<div class=\"mb-2 ".concat(className, "\">\n      <label for=\"").concat(id, "\" class=\"form-label\">").concat(label, "</label>").concat(icon, "\n      <select class=\"form-select form-select-sm\" name=\"").concat(name, "\" id=\"").concat(id, "\">").concat(options.join('\n'), "</select>\n    </div>");
+}
+function _elementInputRadio2() {
+  var name = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 'check';
+  var _ref7 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {},
+    _ref7$value = _ref7.value,
+    value = _ref7$value === void 0 ? '' : _ref7$value,
+    _ref7$label = _ref7.label,
+    label = _ref7$label === void 0 ? 'label' : _ref7$label,
+    _ref7$className = _ref7.className,
+    className = _ref7$className === void 0 ? '' : _ref7$className,
+    _ref7$disabled = _ref7.disabled,
+    disabled = _ref7$disabled === void 0 ? false : _ref7$disabled;
+  var id = "ch-" + crypto.randomUUID();
+  return "<div class=\"form-check mb-1\">\n      <input class=\"form-check-input\" name=\"".concat(name, "\" type=\"radio\" autocomplete=\"off\" value=\"", true, "\" id=\"").concat(id, "\" ").concat(value ? 'checked' : '', ">\n      <label class=\"form-check-label\" for=\"").concat(id, "\">").concat(label, "</label>\n    </div>");
+}
+function _elementInputScales2() {
+  var name = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 'scales';
+  var _ref8 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {},
+    _ref8$value = _ref8.value,
+    value = _ref8$value === void 0 ? '' : _ref8$value,
+    _ref8$label = _ref8.label,
+    label = _ref8$label === void 0 ? 'label' : _ref8$label,
+    _ref8$options = _ref8.options,
+    options = _ref8$options === void 0 ? [] : _ref8$options,
+    _ref8$className = _ref8.className,
+    className = _ref8$className === void 0 ? '' : _ref8$className,
+    _ref8$disabled = _ref8.disabled,
+    disabled = _ref8$disabled === void 0 ? false : _ref8$disabled;
+  options = options.map(function (e) {
+    var id = "ch-" + crypto.randomUUID();
+    return "<div>\n        <input class=\"form-radio-scale d-none\" type=\"radio\" name=\"".concat(name, "\" value=\"").concat(e.name, "\" autocomplete=\"off\" id=\"").concat(id, "\" ").concat(e.name == value ? 'checked' : '', ">\n        <label class=\"form-check-label border\" for=\"").concat(id, "\" title=\"").concat(e.name, "\" style=\"background: linear-gradient( to bottom, ").concat(e.value.map(function (e, i) {
+      return "".concat(e, " ").concat(20 * i, "%, ").concat(e, " ").concat(20 * (i + 1), "%");
+    }).join(','), "); width:15px; height:75px;\"></label>\n        </div>");
+  });
+  return "<div class=\"mb-1 ".concat(className, "\">\n        <label class=\"form-check-label mb-1\">").concat(label, "</label>\n        <div class=\"p-1\" style=\"display:flex; flex-wrap: wrap; column-gap: 5px;\">\n          ").concat(options.join('\n'), "\n        </div>\n      </div>");
+}
+function _elementHelp2(options) {
+  var id = "ch-" + crypto.randomUUID();
+  if (options.display == 'inline') return "<span>".concat(options.content, "</span>");
+  if (options.display == 'block') return "<div id=\"".concat(id, "\" class=\"form-text\">\n        ").concat(options.content, "\n      </div>");
+}
 
 })();
 
