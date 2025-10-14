@@ -1,6 +1,7 @@
-import set from 'lodash/set'
-import get from 'lodash/get'
 import cloneDeep from 'lodash/cloneDeep'
+import isEqual from 'lodash/isEqual'
+import isPlainObject from 'lodash/isPlainObject'
+import merge from 'lodash/merge'
 import Papa from 'papaparse'
 import settings, { menu, layers } from './constants/settings'
 import presets from './constants/presets'
@@ -21,16 +22,26 @@ import i18n from './components/i18n'
 import generateDarkColor from './helpers/generateDarkColor'
 
 export default class CalendarHeatmap {
+  #menu;
+  #layers;
+  #settings;
+  #initialSettings;
+  #componentSettings;
+  #presets;
+  #data;
+  #columns;
   constructor(width, height) {
     this.width = width || 1400;
     this.height = height || 400;
     this.padding = {x: 20, y: 20};
-    this.menu = menu || {};
-    this.layers = layers || [];
-    this.settings = cloneDeep(settings) || [];
-    this.settingsInitial = cloneDeep(settings);
-    this.presets = presets;
-    this.data = [];
+    this.#data = [];
+    this.#columns = [];
+    this.#componentSettings = cloneDeep(settings);
+    this.#initialSettings = this.#settingsJSON();
+    this.#settings = this.#initialSettings;
+    this.#menu = menu || {};
+    this.#layers = layers || [];
+    this.#presets = presets;
   }
   build() {
 
@@ -44,18 +55,15 @@ export default class CalendarHeatmap {
     var yoffset = this.padding.y;
 
     // Set up defs for darkmode
-    if( this.settings.find( itm => itm.id == 'darkmode')?.show ){
+    if( this.settings?.darkmode?.show ){
       var defs = draw.defs();
 
       let style = []
-      for(let i in this.settings){
-        if( this.settings[i].options.find( itm => itm.name == 'fontColor') ){
-          style.push(` .${this.settings[i].id} { fill: ${ generateDarkColor(this.settings[i].options.find( itm => itm.name == 'fontColor')?.value)} !important;}`)
-        }
-        if( this.settings[i].options.find( itm => itm.name == 'tileFuture')?.value ){
-          style.push(` .future { fill: ${ generateDarkColor(this.settings[i].options.find( itm => itm.name == 'tileColor')?.value)} !important;}`)
-          console.log(this.settings[i].options.find( itm => itm.name == 'tileColor')?.value , generateDarkColor(this.settings[i].options.find( itm => itm.name == 'tileColor')?.value))
-        }
+      for(let id in this.settings){
+        if(this.settings[id]?.fontColor)
+          style.push(` .${id} { fill: ${ generateDarkColor(this.settings[id].fontColor)} !important;}`)
+        if(this.settings[id]?.tileFuture)
+          style.push(` .future { fill: ${ generateDarkColor(this.settings[id]?.tileColor)} !important;}`)
       }
 
       let styleContent = '@media (prefers-color-scheme: dark) {\n';
@@ -69,14 +77,14 @@ export default class CalendarHeatmap {
     var layout = {};
 
     // Apply options
-    for (let i in this.layers) {
-      let key = this.settings.findIndex(itm => itm.id == this.layers[i]);
-      if (this.settings[key] && this.settings[key].show) {
-        var options = this.parseOptions(this.settings[key].options)
+    for (let i in this.#layers) {
+      let key = this.#layers[i]
+      if (this.settings[key] && this.settings[key].show || key == 'calendar') {
+        let options = {...this.settings[key]} // Shallow copy to prevent offsets to seep into settings
         options.x = xoffset;
         options.y = yoffset;
         
-        switch (this.settings[key].id) {
+        switch (key) {
           case 'title':
             yoffset += title( draw, { ...options } ).bbox().height;
             break;
@@ -127,92 +135,73 @@ export default class CalendarHeatmap {
   }
   importData(data){
 
-    let obj = []
+    let arr = []
     // try to parse JSON
-    try{
-      obj = JSON.parse(data);
-      if(!Array.isArray(obj))
-        obj = [];
+    if( typeof(data) === 'object' && Array.isArray(data)){
+      arr = data
     }
-    catch(e){
-      data = Papa.parse(data,{
-        header: true,
-        dynamicTyping: true,
-        skipEmptyLines: true
-      });
-      if(data.errors.length == 0)
-        obj = data.data
-      else{
-        console.log(data.errors)
+    else{
+      try{
+        arr = JSON.parse(data);
+        if(!Array.isArray(arr))
+          arr = [];
+      }
+      catch(e){
+        data = Papa.parse(data,{
+          header: true,
+          dynamicTyping: true,
+          skipEmptyLines: true
+        });
+        if(data.errors.length == 0)
+          arr = data.data
+        else{
+          console.log(data.errors)
+        }
       }
     }
 
-    this.parseData(obj);
+    this.data = arr
 
-    return obj.length == 0
-
-  }
-  parseData(data=[]){
-
-    this.settings.map( e => {
-      if(e.id == "data-input" && data[0]){
-        let keys = Object.keys(data[0]);
-
-        keys = keys.filter( e => e !== '');
-
-        e.options[0].options = keys;
-        e.options[1].options = keys;
+    if(arr.length > 0){
+      if(this.settings['data-input'] && typeof(this.data[0]) === 'object' && !Array.isArray(this.data[0])){
+        this.headers = Object.keys(this.data[0]).filter( e => e !== '');
+        // generate some presets
+        this.settings['data-input'] = {
+          dateColumn: this.headers[0],
+          valueColumn: this.headers[1]
+        }
+        this.settings['data-input'].show = true
       }
-      return e
-    })
+    }
+    return arr.length > 0
 
-    this.data = data
-  }
-  parseOptions(obj) {
-    if (obj === undefined)
-      return {}
-    let options = {}
-    obj.forEach(itm => { options[itm.name] = itm.value; return options; })
-    return options;
   }
   reset() {
-    return this.settings = cloneDeep(this.settingsInitial);
+    this.#columns = [];
+    this.#data = [];
+    this.#settings = cloneDeep(this.#initialSettings);
   }
-  update(obj) {
-    let current = cloneDeep(this.settings);
-    if (!Array.isArray(obj)) {
-      for (let key in obj) {
-        // Parse Value
-        let value = obj[key];
-        if (value == 'true')
-          value = true
-        if (value == 'false')
-          value = false
-
-        // Modify Key
-        let modkey = key.split('.');
-        let idx = current.findIndex(itm => itm.id == modkey[0]);
-
-        modkey = modkey.slice(1);
-
-        if (modkey[0] !== undefined && modkey[0].match(/^options\[/)) {
-          modkey = modkey.slice(0, -1).join('.') + '.value';
-        }
-        else {
-          modkey = modkey.join('.');
-        }
-
-        set(current[idx], modkey, value);
-      }
-    }
-    this.settings = current;
+  resetSettings() {
+    this.#settings = cloneDeep(this.#initialSettings);
+  }
+  get settingsSave() {
+    const current = this.settings;
+    const initial = this.#initialSettings;
+    
+    return this.#getNestedChanges(current, initial);
+  }
+  set settings(obj) {
+    this.#settings = merge(this.#settings, obj) // {...this.#settings, ...obj};
+  }
+  get settings() {
+    return this.#settings;
   }
   settingsHTML() {
 
     let elCount = 0;
     let html = '<form id="settingsform">'
 
-    for (let header in this.menu) {
+    for (let header in this.#menu) {
 
       let uid = "ps-" + crypto.randomUUID();
       let accordionid = "ps-" + crypto.randomUUID();
@@ -225,46 +214,56 @@ export default class CalendarHeatmap {
       html += `<div class="collapse ${!elCount ? "show" : ""}" id="${uid}" data-bs-parent="#settingsform">`
       html += `<div class="accordion" id="${accordionid}">`
 
-      for (let i in this.menu[header]) {
+      for (let i in this.#menu[header]) {
 
-        let idx = this.settings.findIndex(itm => itm.id == this.menu[header][i]);
+        let idx = this.#componentSettings.findIndex(itm => itm.id == this.#menu[header][i]);
 
         if (idx == -1)
           continue;
 
-        if (this.settings[idx].show === undefined && this.settings[idx].options === undefined)
+        if (this.#componentSettings[idx].show === undefined && this.#componentSettings[idx].options === undefined)
           continue;
 
         html += `<div class="accordion-item">
           <h2 class="accordion-header" id="heading${idx}">
             <button class="accordion-button collapsed ps-5" type="button" data-bs-toggle="collapse" data-bs-target="#collapse${idx}" aria-expanded="${elCount === 0 ? 'true' : 'false'}" aria-controls="collapse${idx}">
-            ${this.settings[idx].headerTitle}
+            ${this.#componentSettings[idx].headerTitle}
             </button>
-            ${this.elementInputSwitch([this.settings[idx].id, 'show'].join('.'), {value: this.settings[idx].show, label: '', disabled: this.settings[idx].disabled || false} )}
+            ${this.#elementInputSwitch([this.#componentSettings[idx].id, 'show'].join('.'), {value: this.#componentSettings[idx].show, label: '', disabled: this.#componentSettings[idx].disabled || false} )}
           </h2>
           <div id="collapse${idx}" class="accordion-collapse collapse" aria-labelledby="heading${idx}" data-bs-parent="#${accordionid}">
             <div class="accordion-body row">`;
 
-        if (this.settings[idx].options !== undefined && this.settings[idx].options.length > 0) {
-          for (let i in this.settings[idx].options) {
-            let option = this.settings[idx].options[i];
-            let name = [this.settings[idx].id, `options[${i}]`, option.name].join('.');
-            if (option.type == 'color')
-              html += this.elementInputColor(name, { ...option })
-            if (option.type == 'text')
-              html += this.elementInputText(name, { ...option })
-            if (option.type == 'check')
-              html += this.elementInputCheck(name, { ...option })
-            if (option.type == 'range')
-              html += this.elementInputRange(name, { ...option })
-            if (option.type == 'select')
-              html += this.elementInputSelect(name, { ...option })
-            if (option.type == 'scales')
-              html += this.elementInputScales(name, { ...option })
-            if (option.type == 'help')
-              html += this.elementHelp({ ...option })
-            if (option.type == 'separator')
-              html += `<div class="separator"><hr></div>`
+        if (this.#componentSettings[idx].options !== undefined && this.#componentSettings[idx].options.length > 0) {
+          for (let i in this.#componentSettings[idx].options) {
+            let option = this.#componentSettings[idx].options[i];
+            let name = [this.#componentSettings[idx].id, option.name].join('.');
+            switch(option.type){
+              case('color'):
+                html += this.#elementInputColor(name, { ...option })
+                break
+              case('text'):
+                html += this.#elementInputText(name, { ...option })
+                break
+              case('check'):
+                html += this.#elementInputCheck(name, { ...option })
+                break
+              case('range'):
+                html += this.#elementInputRange(name, { ...option })
+                break
+              case('select'):
+                html += this.#elementInputSelect(name, { ...option })
+                break
+              case('scales'):
+                html += this.#elementInputScales(name, { ...option })
+                break
+              case('help'):
+                html += this.#elementHelp({ ...option })
+                break
+              case('separator'):
+                html += `<div class="separator"><hr></div>`
+                break
+            }
           }
         }
         else {
@@ -284,9 +283,23 @@ export default class CalendarHeatmap {
 
     return html;
   }
-  getPreset(id) {
-    let preset = get(this.presets, id, {});
-    return preset.settings || {}
+  applyPreset(id) {
+    this.settings = this.presets[id]?.settings || {}
+  }
+  get presets(){
+    return this.#presets;
+  }
+  set data(arr){
+    this.#data = arr
+  }
+  get data() {
+    return this.#data;
+  }
+  set headers(arr) {
+    this.#columns = arr;
+  }
+  get headers() {
+    return this.#columns
   }
   presetsHTML() {
     let html = `<select class="form-select form-select-sm" aria-label="Default select example" id="presets-selector">`;
@@ -306,7 +319,44 @@ export default class CalendarHeatmap {
     html += `</select>`;
     return html;
   }
-  elementInputCheck(name = 'check', {value = true, label = 'label', className = '', disabled = false} = {}) {
+  #getNestedChanges(obj1, obj2) {
+    const changes = {};
+    
+    for (const key in obj2) {
+      const val1 = obj1?.[key];
+      const val2 = obj2[key];
+      
+      if (isPlainObject(val1) && isPlainObject(val2)) {
+        // Recursively check nested objects
+        const nestedChanges = this.#getNestedChanges(val1, val2);
+        if (Object.keys(nestedChanges).length > 0) {
+          changes[key] = nestedChanges;
+        }
+      } else if (!isEqual(val1, val2)) {
+        changes[key] = val2;
+      }
+    }
+    
+    return changes;
+  }
+  #settingsJSON(){
+    let s = {}
+    for(let i in this.#componentSettings){
+      s[this.#componentSettings[i].id] = {}
+      for(let a of Object.entries(this.#componentSettings[i]) ){
+        if(!['id','disabled','options','headerTitle'].includes(a[0]))
+          s[this.#componentSettings[i].id][a[0]] = a[1]
+        if(a[0] === 'options'){
+          for(let b of a[1]){
+            if(b.name)
+              s[this.#componentSettings[i].id][b.name] = b.value
+          }
+        }
+      }
+    }
+    return s
+  }
+  #elementInputCheck(name = 'check', {value = true, label = 'label', className = '', disabled = false} = {}) {
     let id = "ch-" + crypto.randomUUID();
     return `<div class="form-check mb-1">
       <input class="form-check-input" name="${name}" type="checkbox" value="${true}" id="${id}" ${value ? 'checked' : ''}>
