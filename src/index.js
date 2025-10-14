@@ -316,7 +316,7 @@ export default class CalendarHeatmap {
   #elementInputSwitch(name = 'switch', {value = true, label = 'label', className = '', disabled = false} = {}) {
     let id = "ch-" + crypto.randomUUID();
     return `<div class="form-check form-switch fs-6" style="position:relative; margin:-2.1rem .5rem .6rem .5rem; z-index:10; width:2em;">
-    <input class="form-check-input" type="checkbox" role="switch" name="${name}" value="${true}" id="${id}" ${value ? 'checked' : ''} ${disabled ? 'disabled' : ''}>
+    <input class="form-check-input" type="checkbox" role="switch" name="${name}" value="${true}" id="${id}" ${value ? 'checked' : ''} ${disabled ? 'disabled' : ''} switch>
     <label class="form-check-label" for="${id}">${label}</label>
   </div>`
 
