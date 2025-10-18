@@ -14,7 +14,7 @@ export const settings = () => {
 
   return {
     "id": "darkmode",
-    "headerTitle": "Automatic Darkmode",
+    "headerTitle": "Darkmode",
     "show": true,
     "disabled": false,
     "options": []
