@@ -65,8 +65,15 @@ export default class CalendarHeatmap {
     if(!this.#draw){
       
       // Initial dimensions
-      if(this.target && typeof this.target === 'string')
+      if(this.target && typeof this.target === 'string'){
         this.#draw = SVG().addTo(this.target).size( this.width, this.height );
+        // Add class
+        if(this.className)
+          this.#draw.addClass('calendar-heatmap');
+        // Add css styles
+        if(this.style)
+          this.#draw.css(style);
+      }
       else
         this.#draw = SVG().size( this.width, this.height );
 
