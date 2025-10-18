@@ -38,7 +38,7 @@ export default class CalendarHeatmap {
     this.#columns = [];
     this.#componentSettings = cloneDeep(settings);
     this.#initialSettings = this.#settingsJSON();
-    this.#settings = this.#initialSettings;
+    this.#settings = cloneDeep(this.#initialSettings);
     this.#menu = menu || {};
     this.#layers = layers || [];
     this.#presets = presets;
