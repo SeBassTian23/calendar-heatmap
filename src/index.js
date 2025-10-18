@@ -36,7 +36,7 @@ export default class CalendarHeatmap {
   constructor(target, {width = 'auto', height = 'auto', className, style, autoInit = true } = {}) {
     this.target = target || null;
     this.width = width == 'auto'? 1400 : width;
-    this.height = height == 'auto'? 1400 : height;
+    this.height = height == 'auto'? 400 : height;
     this.className = className || null;
     this.style = style || null;
     this.#startXY = {x: width, y: height};
