@@ -20,10 +20,10 @@ import {transformValue} from '../components/transform'
 import {monthsForLocale, weekdaysForLocale} from '../components/i18n'
 import help from "../constants/help";
 
-const calendar = ( draw, {x, y, data = [], weekStart = 1, tileSize = 16, tileColor = "#dddddd", tileFuture = true, tileShape= "rectangle", tilePadding = 4.5, monthPadding = 10, monthGap = true, monthsWrapAfter = 12, monthsRowsReverse=false, calendarMonthLabels = false, calendarWeekLabels = false,  scale = false, legend = false, transform = false, tooltip = false, dataInput = false, i18n = false } = {}) => {
+const calendar = ( draw, {x=0, y=0, data = [], weekStart = 1, tileSize = 16, tileColor = "#dddddd", tileFuture = true, tileShape= "rectangle", tilePadding = 4.5, monthPadding = 10, monthGap = true, monthsWrapAfter = 12, monthsRowsReverse=false, calendarMonthLabels = false, calendarWeekLabels = false,  scale = false, legend = false, transform = false, tooltip = false, dataInput = false, i18n = false } = {}) => {
 
   // Initial variables
-  let initial_x = x
+  let initial_x = x;
   let offset_x = x;
   let offset_y = y;
   let offset_x_max = x;
