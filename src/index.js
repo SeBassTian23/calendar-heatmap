@@ -361,6 +361,9 @@ export default class CalendarHeatmap {
     html += `</select>`;
     return html;
   }
+  destroy() {
+    this.#draw.remove();
+  }
   #getNestedChanges(obj1, obj2) {
     const changes = {};
     
