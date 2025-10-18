@@ -30,10 +30,17 @@ export default class CalendarHeatmap {
   #presets;
   #data;
   #columns;
-  constructor(width, height) {
-    this.width = width || 1400;
-    this.height = height || 400;
-    this.padding = {x: 20, y: 20};
+  #draw;
+  #padding;
+  #startXY;
+  constructor(target, {width = 'auto', height = 'auto', className, style, autoInit = true } = {}) {
+    this.target = target || null;
+    this.width = width == 'auto'? 1400 : width;
+    this.height = height == 'auto'? 1400 : height;
+    this.className = className || null;
+    this.style = style || null;
+    this.#startXY = {x: width, y: height};
+    this.#padding = {x: 20, y:20};
     this.#data = [];
     this.#columns = [];
     this.#componentSettings = cloneDeep(settings);
@@ -42,21 +49,36 @@ export default class CalendarHeatmap {
     this.#menu = menu || {};
     this.#layers = layers || [];
     this.#presets = presets;
+    this.#draw = null;
+    autoInit? this.#buildCalendar() : null; // Call build immidiately to show an empty 
   }
   build() {
+    this.#buildCalendar();
+    return this.#draw.svg();
+  }
+  update() {
+    this.#buildCalendar();
+  }
+  #buildCalendar() {
 
     // Init the SVG
-    var draw = SVG().size(this.width, this.height);
+    if(!this.#draw){
+      
+      // Initial dimensions
+      if(this.target && typeof this.target === 'string')
+        this.#draw = SVG().addTo(this.target).size( this.width, this.height );
+      else
+        this.#draw = SVG().size( this.width, this.height );
 
-    // Set viewbox
-    draw.viewbox(`0 0 ${this.width} ${this.height}`)
-
-    var xoffset = this.padding.x;
-    var yoffset = this.padding.y;
+      // Set viewbox
+      this.#draw.viewbox(0, 0, this.width, this.height )
+    }
+    // Clear content before the next redraw
+    this.#draw.clear()
 
     // Set up defs for darkmode
     if( this.settings?.darkmode?.show ){
-      var defs = draw.defs();
+      var defs = this.#draw.defs();
 
       let style = []
       for(let id in this.settings){
@@ -71,67 +93,87 @@ export default class CalendarHeatmap {
       styleContent += '\n}';
 
       defs.element('style').words(styleContent);
-
     }
 
+    // Layout collects all elements for the calendar
     var layout = {};
+
+    var xoffset = this.#padding.x;
+    var yoffset = this.#padding.y;
+    var maxX = 0;
 
     // Apply options
     for (let i in this.#layers) {
       let key = this.#layers[i]
       if (this.settings[key] && this.settings[key].show || key == 'calendar') {
-        let options = {...this.settings[key]} // Shallow copy to prevent offsets to seep into settings
-        options.x = xoffset;
-        options.y = yoffset;
+        
+        // Shallow copy to prevent offsets to seep into settings
+        let options = {...this.settings[key]}
         
         switch (key) {
           case 'title':
-            yoffset += title( draw, { ...options } ).bbox().height;
+            let titleBbox = title( this.#draw, { ...options, ...{x: xoffset, y: yoffset } } ).bbox()
+            yoffset += titleBbox.height;
+            maxX = titleBbox.width > maxX? titleBbox.width : maxX;
             break;
           case 'subtitle':
-            yoffset += subtitle( draw, { ...options } ).bbox().height;
+            let subtitleBbox = subtitle( this.#draw, { ...options, ...{x: xoffset, y: yoffset } } ).bbox();
+            yoffset += subtitleBbox.height;
+            maxX = subtitleBbox.width > maxX? subtitleBbox.width : maxX;
             break;
           case 'scale':
-            layout.scale = scale( draw, { ...options } );
+            layout.scale = scale( this.#draw, { ...options } );
             break;
           case 'legend':
-            layout.legend = legend( draw, { ...options } );
+            layout.legend = legend( this.#draw, { ...options } );
             break;
           case 'transform':
-            layout.transform = transform( draw, { ...options } );
+            layout.transform = transform( this.#draw, { ...options } );
             break;
           case 'tooltip':
-            layout.tooltip = tooltip( draw, { ...options } );
+            layout.tooltip = tooltip( this.#draw, { ...options } );
             break;
           case 'hover':
-            layout.hover = hover( draw, { ...options } );
+            layout.hover = hover( this.#draw, { ...options } );
             break;         
           case 'darkmode':
-            layout.darkmode = darkmode( draw, { ...options } );
+            layout.darkmode = darkmode( this.#draw, { ...options } );
             break;         
           case 'calendar-month':
-            layout.calendarMonthLabels = calendarMonth( draw, { ...options } );
+            layout.calendarMonthLabels = calendarMonth( this.#draw, { ...options } );
             break;
           case 'calendar-week':
-            layout.calendarWeekLabels = calendarWeek( draw, { ...options } );
+            layout.calendarWeekLabels = calendarWeek( this.#draw, { ...options } );
             break;
           case 'data-input':
-            layout.dataInput = dataInput( draw, { ...options } );
+            layout.dataInput = dataInput( this.#draw, { ...options } );
             break;
           case 'i18n':
             layout.i18n = i18n( { ...options } );
             break;            
           case 'calendar':
-            // Gap between titles and calendar
-            options.y += this.padding.y
-            calendar( draw, { ...options, ...layout, data: this.data } );
+            // Add gap between title and tiles if they are visible
+            yoffset += (yoffset > this.#padding.y)? 20 : 0
+
+            // Generate Calendar
+            let {x, y} = calendar( this.#draw, { ...options, ...layout, ...{x: xoffset, y: yoffset }, data: this.data } );
+
+            // Change width if Titles are wider than the calendar
+            x = (x < maxX)? maxX : x
+
+            // Add end and bottom padding
+            x += this.#padding.x
+            y += this.#padding.y
+
+            // Adjust image size if set to auto
+            this.#draw.size( this.#startXY.x == 'auto'? x : this.width, this.#startXY.y == 'auto'? y : this.height );
+              
+            // Adjust the viewbox to fit generated calendar
+            this.#draw.viewbox( 0, 0, x, y );
             break;
         }
       }
     }
-
-    // Final SVG
-    return draw.svg();
   }
   importData(data){
 

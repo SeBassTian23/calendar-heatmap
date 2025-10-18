@@ -320,14 +320,8 @@ const calendar = ( draw, {x=0, y=0, data = [], weekStart = 1, tileSize = 16, til
   if(legend){
     offset_y = drawLegend( draw, offset_x_max, offset_y, colors, minData, maxData, tileShape, tileBorder, tileSize, tilePadding, monthGap, monthPadding, legend, transform, tooltip, i18n );
   }
-  
-  // Set size and viewbox
-  let viewboxWidth = (max_x + tileSize + 20)  
-  draw.size(viewboxWidth, offset_y+30);
 
-  draw.viewbox(`0 0 ${ viewboxWidth   } ${draw.height()}`);
-
-  return null;
+  return {x: (max_x + tileSize), y: offset_y };
 }
 
 export default calendar;
