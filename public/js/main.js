@@ -1,31 +1,5 @@
-let applyUpdate = () => {
-
-  let settings = calendarheatmap.settings
-
-  for (let name in settings) {
-    const options = Object.entries(settings[name])
-    for(let option of options){
-      // find elements
-      let el = document.querySelector(`input[name="${name}.${option[0]}"]`)
-      if (!el)
-        continue;
-      if (el.type == 'checkbox' && el.checked !== null){
-        el.checked = option[1] ? true : false;
-      }
-      else{
-        el.value = option[1]
-      }
-    }
-  }
-  document.querySelector('#svg').innerHTML = calendarheatmap.build();
-  document.querySelector('#svg svg').alt = 'Calendar style heatmap.';
-}
-
 // Initiate
-const calendarheatmap = new CalendarHeatmap();
-
-// Figure container
-applyUpdate()
+const calendarheatmap = new CalendarHeatmap("#svg");
 
 // Figure settings
 document.querySelector('#settings').innerHTML = calendarheatmap.settingsHTML();
@@ -62,7 +36,7 @@ document.querySelector('#settings form').addEventListener("change", (event) => {
   }
 
   calendarheatmap.settings = settings
-  applyUpdate();
+  calendarheatmap.update();
 });
 
 document.querySelector('#download-svg').addEventListener('click', (event) => {
@@ -137,7 +111,7 @@ document.querySelector('#import-json').addEventListener('change', (event) => {
     reader.onload = function () {
       let importedSettings = JSON.parse(reader.result);
       calendarheatmap.settings = importedSettings;
-      applyUpdate();
+      calendarheatmap.update();
     };
     reader.onerror = function () {
       console.log(reader.error);
@@ -192,18 +166,26 @@ document.querySelector('#import-data').addEventListener('change', (event)=> {
 document.querySelector('#presets-selector').addEventListener('change', (event) => {
   calendarheatmap.reset();
   calendarheatmap.applyPreset(event.target.value);
-  applyUpdate();
+  calendarheatmap.update();
 });
 
 document.querySelector('#reset-form').addEventListener('click', (event) => {
   event.preventDefault();
-  document.querySelector('#settings form').reset();
-  document.querySelectorAll('#settings form select').forEach( itm => itm.innerHTML = "" );
-  document.querySelector('#settings input[name="data-input.show"]').checked = false;
-  document.querySelector('#settings input[name="data-input.show"]').dispatchEvent(new Event('change', { bubbles: true }));
+  // Reset Presets Selector
   document.querySelector('#presets-selector').value = '-1';
-  calendarheatmap.reset();
-  applyUpdate();
+  // Reset Form
+  document.querySelector('#settings form').reset();
+  // If there is no data, everything can be reset
+  if(calendarheatmap.data.length === 0){
+    document.querySelectorAll('#settings form select').forEach( itm => itm.innerHTML = "" );
+    calendarheatmap.resetSettings();
+    calendarheatmap.update();
+  }
+  else{
+    document.querySelector('#settings input[name="data-input.show"]').checked = true;
+    // We use the dispatch Event here, as the reset form has data deactivated
+    document.querySelector('#settings input[name="data-input.show"]').dispatchEvent(new Event('change', { bubbles: true }));
+  }
 });
 
 document.querySelector('#toggleBtn').addEventListener('click', (event) => {

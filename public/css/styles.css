@@ -24,7 +24,7 @@
   font-weight: bold;
   background-color: var(--bs-gray-200);
 }
-.accordion-button.collapsed{
+.accordion-button.collapsed {
   color: var(--bs-dark);
 }
 .accordion-button.collapsed:hover{
@@ -33,6 +33,17 @@
 }
 .accordion-button:not(.collapsed)::after {
   background-image: var(--bs-accordion-btn-icon);
+}
+
+html[data-bs-theme="dark"] {
+  
+  .accordion-button.collapsed,
+  .accordion-button:not([aria-expanded="true"]) {
+    color: var(--bs-light);
+  }
+  .accordion-button.collapsed:hover {
+    color: var(--bs-dark);
+  }
 }
 
 /* Form Label Font Weight */
@@ -84,7 +95,11 @@
 }
 
 figure {
-  width: 100%
+  width: 100%;
+  & > div > svg {
+    width: 100%;
+    height: auto;
+  }
 }
 
 figure > div > svg {
@@ -92,7 +107,7 @@ figure > div > svg {
   height: auto;
 }
 
-#svg {
+#svg:empty {
   aspect-ratio: auto 1400/400;
   display:flex;
   align-items: center;
