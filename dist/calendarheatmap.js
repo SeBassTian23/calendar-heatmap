@@ -22668,7 +22668,7 @@ class CalendarHeatmap {
     _classPrivateFieldInitSpec(this, _startXY, void 0);
     this.target = target || null;
     this.width = width == 'auto' ? 1400 : width;
-    this.height = height == 'auto' ? 1400 : height;
+    this.height = height == 'auto' ? 400 : height;
     this.className = _className || null;
     this.style = _style || null;
     _classPrivateFieldSet(_startXY, this, {
@@ -22857,7 +22857,7 @@ function _buildCalendar() {
     if (this.target && typeof this.target === 'string') {
       _classPrivateFieldSet(_draw, this, (0,_svgdotjs_svg_js__WEBPACK_IMPORTED_MODULE_19__.SVG)().addTo(this.target).size(this.width, this.height));
       // Add class
-      if (this.className) _classPrivateFieldGet(_draw, this).addClass('calendar-heatmap');
+      if (this.className) _classPrivateFieldGet(_draw, this).addClass(this.className);
       // Add css styles
       if (this.style) _classPrivateFieldGet(_draw, this).css(style);
     } else _classPrivateFieldSet(_draw, this, (0,_svgdotjs_svg_js__WEBPACK_IMPORTED_MODULE_19__.SVG)().size(this.width, this.height));
