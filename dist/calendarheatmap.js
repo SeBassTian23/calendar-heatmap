@@ -22740,9 +22740,7 @@ class CalendarHeatmap {
     _classPrivateFieldSet(_settings, this, lodash_cloneDeep__WEBPACK_IMPORTED_MODULE_0___default()(_classPrivateFieldGet(_initialSettings, this)));
   }
   get settingsSave() {
-    const current = this.settings;
-    const initial = _classPrivateFieldGet(_initialSettings, this);
-    return _assertClassBrand(_CalendarHeatmap_brand, this, _getNestedChanges).call(this, current, initial);
+    return _assertClassBrand(_CalendarHeatmap_brand, this, _getNestedChanges).call(this, _classPrivateFieldGet(_initialSettings, this), this.settings);
   }
   set settings(obj) {
     _classPrivateFieldSet(_settings, this, lodash_merge__WEBPACK_IMPORTED_MODULE_3___default()(_classPrivateFieldGet(_settings, this), obj)); // {...this.#settings, ...obj};
