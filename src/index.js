@@ -234,10 +234,7 @@ export default class CalendarHeatmap {
     this.#settings = cloneDeep(this.#initialSettings);
   }
   get settingsSave() {
-    const current = this.settings;
-    const initial = this.#initialSettings;
-    
-    return this.#getNestedChanges(current, initial);
+    return this.#getNestedChanges(this.#initialSettings, this.settings);
   }
   set settings(obj) {
     this.#settings = merge(this.#settings, obj) // {...this.#settings, ...obj};
