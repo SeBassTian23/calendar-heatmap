@@ -110,8 +110,12 @@ document.querySelector('#import-json').addEventListener('change', (event) => {
     reader.readAsText(file);
     reader.onload = function () {
       let importedSettings = JSON.parse(reader.result);
+      document.querySelector('#settings form').reset();
+      document.querySelector('#presets-selector').value = '-1';
+      calendarheatmap.reset();
       calendarheatmap.settings = importedSettings;
       calendarheatmap.update();
+      updateForm();
     };
     reader.onerror = function () {
       console.log(reader.error);
@@ -167,6 +171,7 @@ document.querySelector('#presets-selector').addEventListener('change', (event) =
   calendarheatmap.reset();
   calendarheatmap.applyPreset(event.target.value);
   calendarheatmap.update();
+  updateForm();
 });
 
 document.querySelector('#reset-form').addEventListener('click', (event) => {
@@ -211,3 +216,19 @@ document.querySelectorAll('input[type="range"]').forEach( e => {
     e.target.title = e.target.value;
   });
 });  
+
+function updateForm() {
+  for (let category in calendarheatmap.settings) {
+    let elements = calendarheatmap.settings[category]
+    for (let e in elements) {
+      let el = document.querySelector(`input[name="${category}.${e}"]`);
+      if (el) {
+        if (typeof elements[e] === 'boolean'){
+          el.checked = elements[e]
+        }
+        else
+          el.value = elements[e]
+      }
+    }
+  }
+}
