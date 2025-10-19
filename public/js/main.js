@@ -86,7 +86,7 @@ document.querySelector('#download-png').addEventListener('click', (event) => {
 document.querySelector('#download-json').addEventListener('click', (event) => {
   event.preventDefault();
 
-  let settings = JSON.stringify(calendarheatmap.settings, null, 2);
+  let settings = JSON.stringify(calendarheatmap.settingsSave, null, 2);
 
   let blob = new Blob([settings], { type: 'text/json;charset=utf-8' });
   let URL = window.URL || window.webkitURL || window;
