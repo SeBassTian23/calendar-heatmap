@@ -21015,7 +21015,6 @@ const calendar = function (draw) {
   let max_x = 0;
   let tileBorder = (0,chroma_js__WEBPACK_IMPORTED_MODULE_0__["default"])(tileColor).darken(2).hex();
   let monthLabelHeight = 0;
-  console.log(dataInput.monthStart);
 
   // Parse size as Number
   tileSize = Number(tileSize);
@@ -21041,7 +21040,7 @@ const calendar = function (draw) {
       minMonth = dayjs__WEBPACK_IMPORTED_MODULE_1___default()(dataInput.monthStart);
     }
     if (dataInput.monthEnd && dataInput.monthEnd.match(/\d{4}-\d{2}/) && dataInput.monthEnd != maxMonth.format('YYYY-MM')) {
-      maxMonth = dayjs__WEBPACK_IMPORTED_MODULE_1___default()(dataInput.monthEnd);
+      maxMonth = dayjs__WEBPACK_IMPORTED_MODULE_1___default()(dataInput.monthEnd).endOf('month');
     }
     startDate = minMonth.startOf('month');
     months = Math.ceil(maxMonth.diff(minMonth, 'month', true));
