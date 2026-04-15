@@ -20997,6 +20997,8 @@ const calendar = function (draw) {
     monthsRowsReverse = false,
     calendarMonthLabels = false,
     calendarWeekLabels = false,
+    monthStart = null,
+    monthEnd = null,
     scale = false,
     legend = false,
     transform = false,
@@ -21013,6 +21015,7 @@ const calendar = function (draw) {
   let max_x = 0;
   let tileBorder = (0,chroma_js__WEBPACK_IMPORTED_MODULE_0__["default"])(tileColor).darken(2).hex();
   let monthLabelHeight = 0;
+  console.log(dataInput.monthStart);
 
   // Parse size as Number
   tileSize = Number(tileSize);
@@ -21034,8 +21037,17 @@ const calendar = function (draw) {
     return e;
   });
   if (minMonth && dataInput) {
+    if (dataInput.monthStart && dataInput.monthStart.match(/\d{4}-\d{2}/) && dataInput.monthStart != minMonth.format('YYYY-MM')) {
+      minMonth = dayjs__WEBPACK_IMPORTED_MODULE_1___default()(dataInput.monthStart);
+    }
+    if (dataInput.monthEnd && dataInput.monthEnd.match(/\d{4}-\d{2}/) && dataInput.monthEnd != maxMonth.format('YYYY-MM')) {
+      maxMonth = dayjs__WEBPACK_IMPORTED_MODULE_1___default()(dataInput.monthEnd);
+    }
     startDate = minMonth.startOf('month');
     months = Math.ceil(maxMonth.diff(minMonth, 'month', true));
+
+    // Make sure there are not too many months
+    if (months > 120) months = 12;
   }
 
   // Locale based formates
@@ -21540,11 +21552,15 @@ __webpack_require__.r(__webpack_exports__);
 const dataInput = function (draw) {
   let {
     dateColumn = '',
-    valueColumn = ''
+    valueColumn = '',
+    monthStart = null,
+    monthEnd = null
   } = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
   return {
     dateColumn,
-    valueColumn
+    valueColumn,
+    monthStart,
+    monthEnd
   };
 };
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (dataInput);
@@ -21566,6 +21582,16 @@ const settings = () => {
       "value": '',
       options: [],
       "label": "Values"
+    }, {
+      "type": "month",
+      "name": "monthStart",
+      "value": false,
+      "label": "Start Month and Year"
+    }, {
+      "type": "month",
+      "name": "monthEnd",
+      "value": false,
+      "label": "End Month and Year"
     }]
   };
 };
@@ -22786,6 +22812,9 @@ class CalendarHeatmap {
               case 'select':
                 html += _assertClassBrand(_CalendarHeatmap_brand, this, _elementInputSelect).call(this, name, _objectSpread({}, option));
                 break;
+              case 'month':
+                html += _assertClassBrand(_CalendarHeatmap_brand, this, _elementInputMonth).call(this, name, _objectSpread({}, option));
+                break;
               case 'scales':
                 html += _assertClassBrand(_CalendarHeatmap_brand, this, _elementInputScales).call(this, name, _objectSpread({}, option));
                 break;
@@ -23103,6 +23132,17 @@ function _elementInputScales() {
     return "<div>\n        <input class=\"form-radio-scale d-none\" type=\"radio\" name=\"".concat(name, "\" value=\"").concat(e.name, "\" autocomplete=\"off\" id=\"").concat(id, "\" ").concat(e.name == value ? 'checked' : '', ">\n        <label class=\"form-check-label border\" for=\"").concat(id, "\" title=\"").concat(e.name, "\" style=\"background: linear-gradient( to bottom, ").concat(e.value.map((e, i) => "".concat(e, " ").concat(20 * i, "%, ").concat(e, " ").concat(20 * (i + 1), "%")).join(','), "); width:15px; height:75px;\"></label>\n        </div>");
   });
   return "<div class=\"mb-1 ".concat(className, "\">\n        <label class=\"form-check-label mb-1\">").concat(label, "</label>\n        <div class=\"p-1\" style=\"display:flex; flex-wrap: wrap; column-gap: 5px;\">\n          ").concat(options.join('\n'), "\n        </div>\n      </div>");
+}
+function _elementInputMonth() {
+  let name = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 'month';
+  let {
+    value = '',
+    label = 'label',
+    className = '',
+    disabled = false
+  } = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+  let id = "ch-" + crypto.randomUUID();
+  return "<div class=\"mb-1 ".concat(className, "\">\n        <label class=\"form-check-label mb-1\">").concat(label, "</label>\n        <div class=\"p-1\" style=\"display:flex; flex-wrap: wrap; column-gap: 5px;\">\n          <input type=\"month\" class=\"form-control form-control-sm\" name=\"").concat(name, "\" id=\"").concat(id, "\">\n        </div>\n      </div>");
 }
 function _elementHelp(options) {
   let id = "ch-" + crypto.randomUUID();
