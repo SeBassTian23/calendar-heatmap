@@ -86,7 +86,7 @@ const calendar = ( draw, {
       minMonth = dayjs(dataInput.monthStart)
     }
     if(dataInput.monthEnd && dataInput.monthEnd.match(/\d{4}-\d{2}/) && dataInput.monthEnd != maxMonth.format('YYYY-MM')){
-      maxMonth = dayjs(dataInput.monthEnd)
+      maxMonth = dayjs(dataInput.monthEnd).endOf('month')
     }
     startDate = minMonth.startOf('month');
     months = Math.ceil(maxMonth.diff(minMonth, 'month', true));
