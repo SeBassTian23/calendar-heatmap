@@ -20,7 +20,31 @@ import {transformValue} from '../components/transform'
 import {monthsForLocale, weekdaysForLocale} from '../components/i18n'
 import help from "../constants/help";
 
-const calendar = ( draw, {x=0, y=0, data = [], weekStart = 1, tileSize = 16, tileColor = "#dddddd", tileFuture = true, tileShape= "rectangle", tilePadding = 4.5, monthPadding = 10, monthGap = true, monthsWrapAfter = 12, monthsRowsReverse=false, calendarMonthLabels = false, calendarWeekLabels = false,  scale = false, legend = false, transform = false, tooltip = false, dataInput = false, i18n = false } = {}) => {
+const calendar = ( draw, {
+  x=0,
+  y=0,
+  data = [],
+  weekStart = 1,
+  tileSize = 16,
+  tileColor = "#dddddd",
+  tileFuture = true,
+  tileShape= "rectangle",
+  tilePadding = 4.5,
+  monthPadding = 10,
+  monthGap = true,
+  monthsWrapAfter = 12,
+  monthsRowsReverse=false,
+  calendarMonthLabels = false,
+  calendarWeekLabels = false,
+  monthStart = null,
+  monthEnd = null,
+  scale = false,
+  legend = false,
+  transform = false,
+  tooltip = false,
+  dataInput = false,
+  i18n = false
+} = {}) => {
 
   // Initial variables
   let initial_x = x;
@@ -58,8 +82,18 @@ const calendar = ( draw, {x=0, y=0, data = [], weekStart = 1, tileSize = 16, til
   });
 
   if(minMonth && dataInput){
+    if(dataInput.monthStart && dataInput.monthStart.match(/\d{4}-\d{2}/)  && dataInput.monthStart != minMonth.format('YYYY-MM')){
+      minMonth = dayjs(dataInput.monthStart)
+    }
+    if(dataInput.monthEnd && dataInput.monthEnd.match(/\d{4}-\d{2}/) && dataInput.monthEnd != maxMonth.format('YYYY-MM')){
+      maxMonth = dayjs(dataInput.monthEnd)
+    }
     startDate = minMonth.startOf('month');
     months = Math.ceil(maxMonth.diff(minMonth, 'month', true));
+
+    // Make sure there are not too many months
+    if(months > 120)
+      months = 12;
   }
 
   // Locale based formates

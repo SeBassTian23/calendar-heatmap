@@ -300,6 +300,9 @@ export default class CalendarHeatmap {
               case('select'):
                 html += this.#elementInputSelect(name, { ...option })
                 break
+              case('month'):
+                html += this.#elementInputMonth(name, { ...option })
+                break
               case('scales'):
                 html += this.#elementInputScales(name, { ...option })
                 break
@@ -470,6 +473,15 @@ export default class CalendarHeatmap {
         <label class="form-check-label mb-1">${label}</label>
         <div class="p-1" style="display:flex; flex-wrap: wrap; column-gap: 5px;">
           ${options.join('\n')}
+        </div>
+      </div>`;
+  }
+  #elementInputMonth(name = 'month', {value = '', label = 'label', className = '', disabled = false} = {}) {
+    let id = "ch-" + crypto.randomUUID();
+    return `<div class="mb-1 ${className}">
+        <label class="form-check-label mb-1">${label}</label>
+        <div class="p-1" style="display:flex; flex-wrap: wrap; column-gap: 5px;">
+          <input type="month" class="form-control form-control-sm" name="${name}" id="${id}">
         </div>
       </div>`;
   }
